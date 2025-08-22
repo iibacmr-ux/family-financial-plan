@@ -1,2483 +1,2131 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 import json
 import io
-import xlsxwriter
+from typing import Dict, List, Any
+import uuid
 
 # Configuration de la page
 st.set_page_config(
-    page_title="Plan Financier Familial",
+    page_title="Plan Financier Stratégique Familial",
     page_icon="💰",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# ============================================================================
-# CSS CUSTOM
-# ============================================================================
-
-def load_css():
-    st.markdown("""
-    <style>
-    /* Import des fontes */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
-    /* Variables CSS */
-    :root {
-        --color-primary: rgba(33, 128, 141, 1);
-        --color-success: rgba(33, 128, 141, 1);
-        --color-error: rgba(192, 21, 47, 1);
-        --color-warning: rgba(168, 75, 47, 1);
-        --color-info: rgba(98, 108, 113, 1);
-        --color-background: rgba(252, 252, 249, 1);
-        --color-surface: rgba(255, 255, 253, 1);
-        --color-text: rgba(19, 52, 59, 1);
+# CSS personnalisé pour conserver le design original
+st.markdown("""
+<style>
+    .main-header {
+        background: linear-gradient(90deg, #1f4e79, #2e7d8f);
+        color: white;
+        padding: 1rem;
+        border-radius: 10px;
+        text-align: center;
+        margin-bottom: 2rem;
     }
-
-    /* Reset Streamlit */
-    .main .block-container {
-        padding: 2rem 1rem;
-        max-width: none;
-        background-color: var(--color-background);
+    
+    .metric-card {
+        background: white;
+        border: 2px solid #e0e0e0;
+        border-radius: 10px;
+        padding: 1rem;
+        margin: 0.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
-
-    /* Kanban Cards */
+    
+    .project-card {
+        background: #f8f9fa;
+        border-left: 4px solid #20b2aa;
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 0.5rem 0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .actif-card {
+        border-left-color: #28a745;
+        background: #f8fff9;
+    }
+    
+    .passif-card {
+        border-left-color: #dc3545;
+        background: #fff8f8;
+    }
+    
+    .investissement-card {
+        border-left-color: #ffc107;
+        background: #fffef8;
+    }
+    
+    .kanban-column {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 1rem;
+        margin: 0.5rem;
+        min-height: 400px;
+    }
+    
     .kanban-card {
         background: white;
-        border: 1px solid #e0e0e0;
         border-radius: 8px;
-        padding: 12px;
-        margin: 8px 0;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        padding: 0.8rem;
+        margin: 0.5rem 0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        border-left: 4px solid;
     }
-
-    .kanban-card.en-retard {
-        border-left: 4px solid #ff4444;
+    
+    .kanban-retard { border-left-color: #dc3545; }
+    .kanban-risque { border-left-color: #ffc107; }
+    .kanban-cours { border-left-color: #17a2b8; }
+    .kanban-avance { border-left-color: #28a745; }
+    .kanban-bloque { border-left-color: #6c757d; }
+    
+    .mindset-box {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1rem;
+        border-radius: 10px;
+        margin: 1rem 0;
+    }
+    
+    .mentor-kiyosaki {
+        border-left: 4px solid #ff6b6b;
         background: #fff5f5;
+        padding: 1rem;
+        margin: 0.5rem 0;
     }
-
-    .kanban-card.a-risque {
-        border-left: 4px solid #ff8800;
-        background: #fff8f0;
+    
+    .mentor-buffett {
+        border-left: 4px solid #4ecdc4;
+        background: #f0fdfc;
+        padding: 1rem;
+        margin: 0.5rem 0;
     }
-
-    .kanban-card.en-avance {
-        border-left: 4px solid #00aa00;
-        background: #f0fff0;
+    
+    .mentor-ramsey {
+        border-left: 4px solid #45b7d1;
+        background: #f0f9ff;
+        padding: 1rem;
+        margin: 0.5rem 0;
     }
-
-    .kanban-card.en-cours {
-        border-left: 4px solid #007bff;
-        background: #f0f8ff;
+    
+    .phase-stabilisation { color: #dc3545; font-weight: bold; }
+    .phase-transition { color: #ffc107; font-weight: bold; }
+    .phase-expansion { color: #28a745; font-weight: bold; }
+    
+    .progress-bar {
+        background: #e9ecef;
+        border-radius: 10px;
+        height: 20px;
+        overflow: hidden;
     }
-
-    .kanban-card.bloque {
-        border-left: 4px solid #666666;
-        background: #f5f5f5;
+    
+    .progress-fill {
+        height: 100%;
+        border-radius: 10px;
+        transition: width 0.3s ease;
     }
-
-    .admin-section {
-        background: #f8f9fa;
+    
+    .info-tooltip {
+        background: #e3f2fd;
+        border: 1px solid #2196f3;
         border-radius: 8px;
-        padding: 16px;
-        margin: 16px 0;
-        border: 1px solid #e0e0e0;
+        padding: 1rem;
+        margin: 0.5rem 0;
     }
-    </style>
-    """, unsafe_allow_html=True)
+    
+    .warning-box {
+        background: #fff3cd;
+        border: 1px solid #ffc107;
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 0.5rem 0;
+    }
+    
+    .success-box {
+        background: #d4edda;
+        border: 1px solid #28a745;
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 0.5rem 0;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-# ============================================================================
-# DONNÉES ET LOGIQUE METIER
-# ============================================================================
+# Fonction utilitaire sécurisée
+def safe_get(data: Dict, key: str, default=None):
+    """Fonction sécurisée pour obtenir une valeur d'un dictionnaire"""
+    return data.get(key, default) if data else default
 
-def initialize_session_state():
-    """Initialise les données de session avec TOUS les champs requis"""
+# Initialisation du state
+def init_session_state():
+    """Initialise le state de la session avec des données par défaut"""
     if 'projets' not in st.session_state:
         st.session_state.projets = [
             {
-                'id': 1,
-                'nom': 'Titre foncier Mejeuh',
+                'id': str(uuid.uuid4()),
+                'nom': 'Projet IIBA',
                 'type': 'Actif générateur',
-                'montant_total': 2815000,
-                'budget_alloue_mensuel': 200000,
-                'montant_utilise_reel': 50000,
-                'cash_flow_mensuel': 0,
+                'montant_total': 2790000,
+                'budget_alloue_mensuel': 0,
+                'montant_utilise_reel': 2790000,
+                'cash_flow_mensuel': 232500,
+                'roi_attendu': 10.0,
                 'statut': 'En cours',
-                'echeance': date(2025, 6, 30),
-                'roi_attendu': 12,
                 'priorite': 'Haute',
-                'description': 'Acquisition terrain pour location future',
-                'source_financement': 'Salaire William',
-                'responsable': 'Alix',
-                'date_creation': datetime(2025, 1, 15),
-                'date_modification': datetime(2025, 2, 10),
-                'suivi_mensuel': [
-                    {'mois': '2025-01', 'prevu': 200000, 'reel': 50000}
-                ]
-            },
-            {
-                'id': 2,
-                'nom': 'Voyage enfants Suisse',
-                'type': 'Passif',
-                'montant_total': 8189592,
-                'budget_alloue_mensuel': 680000,
-                'montant_utilise_reel': 0,
-                'cash_flow_mensuel': -680000,
-                'statut': 'Planifié',
-                'echeance': date(2025, 8, 15),
-                'roi_attendu': 0,
-                'priorite': 'Moyenne',
-                'description': 'Voyage familial cohésion',
-                'source_financement': 'Salaire William',
+                'echeance': date(2025, 12, 31),
+                'categorie': 'Business',
+                'description': 'Développement du projet IIBA',
+                'source_financement': 'Revenus William',
                 'responsable': 'William',
-                'date_creation': datetime(2025, 1, 20),
-                'date_modification': datetime(2025, 1, 20),
+                'date_creation': datetime.now(),
+                'date_modification': datetime.now(),
                 'suivi_mensuel': []
             },
             {
-                'id': 3,
+                'id': str(uuid.uuid4()),
+                'nom': 'Voyage Suisse famille',
+                'type': 'Passif',
+                'montant_total': 8200000,
+                'budget_alloue_mensuel': 1366667,
+                'montant_utilise_reel': 0,
+                'cash_flow_mensuel': -1366667,
+                'roi_attendu': 0.0,
+                'statut': 'À venir',
+                'priorite': 'Haute',
+                'echeance': date(2025, 6, 23),
+                'categorie': 'Familial',
+                'description': 'Voyage en famille en Suisse',
+                'source_financement': 'Revenus William',
+                'responsable': 'Alix',
+                'date_creation': datetime.now(),
+                'date_modification': datetime.now(),
+                'suivi_mensuel': []
+            },
+            {
+                'id': str(uuid.uuid4()),
                 'nom': 'Scolarité enfants',
-                'type': 'Investissement formation',
+                'type': 'Investissement',
                 'montant_total': 6500000,
-                'budget_alloue_mensuel': 542000,
-                'montant_utilise_reel': 1084000,
-                'cash_flow_mensuel': -542000,
+                'budget_alloue_mensuel': 541667,
+                'montant_utilise_reel': 1700000,
+                'cash_flow_mensuel': -541667,
+                'roi_attendu': 15.0,
                 'statut': 'En cours',
+                'priorite': 'Critique',
                 'echeance': date(2025, 12, 31),
-                'roi_attendu': 25,
-                'priorite': 'Critique',
-                'description': 'Éducation Uriel, Naelle, Nell-Henri',
-                'source_financement': 'Revenus IIBA',
-                'responsable': 'Alix',
-                'date_creation': datetime(2024, 12, 1),
-                'date_modification': datetime(2025, 2, 15),
-                'suivi_mensuel': [
-                    {'mois': '2025-01', 'prevu': 542000, 'reel': 542000},
-                    {'mois': '2025-02', 'prevu': 542000, 'reel': 542000}
-                ]
-            },
-            {
-                'id': 4,
-                'nom': 'Projet IIBA',
-                'type': 'Actif générateur',
-                'montant_total': 2786480,
-                'budget_alloue_mensuel': 100000,
-                'montant_utilise_reel': 150000,
-                'cash_flow_mensuel': 232000,
-                'statut': 'Développement',
-                'echeance': date(2025, 3, 30),
-                'roi_attendu': 18,
-                'priorite': 'Critique',
-                'description': 'Business génération revenus passifs',
-                'source_financement': 'Épargne',
-                'responsable': 'William',
-                'date_creation': datetime(2024, 11, 10),
-                'date_modification': datetime(2025, 2, 8),
-                'suivi_mensuel': [
-                    {'mois': '2025-01', 'prevu': 100000, 'reel': 75000},
-                    {'mois': '2025-02', 'prevu': 100000, 'reel': 75000}
-                ]
+                'categorie': 'Éducation',
+                'description': 'Scolarité des trois enfants',
+                'source_financement': 'Revenus William',
+                'responsable': 'Famille',
+                'date_creation': datetime.now(),
+                'date_modification': datetime.now(),
+                'suivi_mensuel': []
             }
         ]
-
-    if 'revenus_variables' not in st.session_state:
-        st.session_state.revenus_variables = [
+    
+    if 'revenus' not in st.session_state:
+        st.session_state.revenus = [
             {
-                'id': 1,
+                'id': str(uuid.uuid4()),
                 'nom': 'Salaire William',
-                'montant_mensuel': 800000,
                 'type': 'Salaire',
-                'regulier': True,
+                'montant': 1400000,
+                'mois': 'Mars',
+                'annee': 2025,
+                'recurrent': True,
+                'description': 'Salaire mensuel de William',
                 'responsable': 'William',
-                'date_creation': datetime(2024, 12, 1),
-                'date_modification': datetime(2025, 1, 1)
+                'date_creation': datetime.now(),
+                'date_modification': datetime.now()
             },
             {
-                'id': 2,
+                'id': str(uuid.uuid4()),
                 'nom': 'Revenus IIBA',
-                'montant_mensuel': 232000,
                 'type': 'Business',
-                'regulier': False,
+                'montant': 782000,
+                'mois': 'Septembre',
+                'annee': 2025,
+                'recurrent': False,
+                'description': 'Revenus du projet IIBA',
                 'responsable': 'William',
-                'date_creation': datetime(2025, 1, 15),
-                'date_modification': datetime(2025, 2, 1)
-            },
-            {
-                'id': 3,
-                'nom': 'Épargne',
-                'montant_mensuel': 50000,
-                'type': 'Épargne',
-                'regulier': True,
-                'responsable': 'Alix',
-                'date_creation': datetime(2024, 12, 1),
-                'date_modification': datetime(2024, 12, 1)
+                'date_creation': datetime.now(),
+                'date_modification': datetime.now()
             }
         ]
-
-    # Configuration Admin
-    if 'admin_config' not in st.session_state:
-        st.session_state.admin_config = {
-            'kpis_config': {
-                'objectif_cash_flow': 500000,
-                'objectif_ratio_actifs': 40,
-                'objectif_revenus_passifs': 30,
-                'objectif_fonds_urgence': 6
+    
+    if 'config_admin' not in st.session_state:
+        st.session_state.config_admin = {
+            'seuils': {
+                'fonds_urgence_mois': 6,
+                'ratio_actifs_min': 50,
+                'cash_flow_positif': 0,
+                'revenus_passifs_min': 30,
+                'objectif_independance': 100
             },
-            'listes_config': {
-                'types_projet': ['Actif générateur', 'Passif', 'Investissement formation'],
-                'statuts_projet': ['Planifié', 'En cours', 'Développement', 'Réalisé', 'Suspendu'],
-                'priorites': ['Critique', 'Haute', 'Moyenne', 'Faible'],
-                'types_revenu': ['Salaire', 'Business', 'Loyer', 'Investissement', 'Autre'],
-                'responsables': ['Alix', 'William', 'Famille']
+            'listes': {
+                'types_projets': ['Actif générateur', 'Passif', 'Investissement'],
+                'statuts': ['À venir', 'En cours', 'Terminé', 'Suspendu', 'Annulé'],
+                'priorites': ['Critique', 'Haute', 'Moyenne', 'Basse'],
+                'categories': ['Business', 'Familial', 'Éducation', 'Immobilier', 'Personnel'],
+                'responsables': ['Alix', 'William', 'Famille'],
+                'types_revenus': ['Salaire', 'Business', 'Loyer', 'Investissement', 'Bonus']
             },
-            'mentors_conseils': {
-                'Kiyosaki': {
-                    'Actif générateur': 'Excellent ! Cet actif génère des revenus passifs et vous rapproche du quadrant I (Investisseur).',
-                    'Passif': 'Ce passif retire de l argent de votre poche. Est-il vraiment nécessaire ?',
-                    'Investissement formation': 'L éducation est un actif qui génère des revenus futurs plus élevés.'
+            'conseils_mentors': {
+                'kiyosaki': {
+                    'Actif générateur': 'Excellent choix ! Cet actif va mettre de l\'argent dans votre poche. Concentrez-vous sur la scalabilité.',
+                    'Passif': 'Attention ! Ceci sort de l\'argent de votre poche. Limitez ces dépenses et privilégiez les actifs.',
+                    'Investissement': 'Bon pour le capital humain, mais assurez-vous que cela génère des revenus futurs.'
                 },
-                'Buffett': {
-                    'Actif générateur': 'Assurez-vous de comprendre parfaitement ce business et son potentiel long terme.',
-                    'Passif': 'Quel est le coût d opportunité ? Cet argent pourrait-il être mieux investi ?',
-                    'Investissement formation': 'Le meilleur investissement est en vous-même et votre famille.'
+                'buffett': {
+                    'Actif générateur': 'Comprenez-vous parfaitement ce business ? Investissez seulement dans ce que vous maîtrisez.',
+                    'Passif': 'Ces dépenses sont-elles vraiment nécessaires ? Privilégiez la valeur long terme.',
+                    'Investissement': 'L\'éducation est le meilleur investissement. Excellent choix pour l\'avenir.'
                 },
-                'Ramsey': {
-                    'Actif générateur': 'Si ce projet ne vous endette pas excessivement, c est excellent pour votre indépendance.',
-                    'Passif': 'Vérifiez que cet investissement respecte votre budget 50/30/20.',
-                    'Investissement formation': 'L éducation est toujours rentable à long terme.'
+                'ramsey': {
+                    'Actif générateur': 'Payez comptant si possible. Évitez l\'endettement même pour les actifs.',
+                    'Passif': 'Est-ce un BESOIN ou une ENVIE ? Respectez votre budget 50/30/20.',
+                    'Investissement': 'Priorité à l\'éducation ! Mais respectez votre budget d\'urgence.'
                 }
             }
         }
 
-    # Filtre global mois/année avec option "Tout"
-    if 'filter_month' not in st.session_state:
-        st.session_state.filter_month = "Tout"
+    if 'edit_project_id' not in st.session_state:
+        st.session_state.edit_project_id = None
+    if 'edit_revenue_id' not in st.session_state:
+        st.session_state.edit_revenue_id = None
 
-    if 'filter_year' not in st.session_state:
-        st.session_state.filter_year = "Tout"
-
-def safe_get(dict_obj, key, default='N/A'):
-    """Récupère une valeur de dictionnaire de manière sécurisée"""
-    return dict_obj.get(key, default)
-
-def filter_data_by_period(data_list, date_field):
-    """Filtre les données selon la période sélectionnée"""
-    if st.session_state.filter_month == "Tout" and st.session_state.filter_year == "Tout":
-        return data_list
-
-    filtered_data = []
-    for item in data_list:
-        item_date = safe_get(item, date_field)
-        if isinstance(item_date, str):
-            try:
-                item_date = datetime.strptime(item_date, '%Y-%m-%d').date()
-            except:
-                item_date = datetime.now().date()
-        elif isinstance(item_date, datetime):
-            item_date = item_date.date()
-        elif not isinstance(item_date, date):
-            item_date = datetime.now().date()
-
-        # Filtrage par année
-        if st.session_state.filter_year != "Tout":
-            if item_date.year != st.session_state.filter_year:
-                continue
-
-        # Filtrage par mois
-        if st.session_state.filter_month != "Tout":
-            if item_date.month != st.session_state.filter_month:
-                continue
-
-        filtered_data.append(item)
-
-    return filtered_data
-
-def calculer_kpis():
-    """Calcule les KPIs en temps réel avec filtrage par période"""
-    # Filtrer projets et revenus selon la période
-    projets = filter_data_by_period(st.session_state.projets, 'date_creation')
-    revenus = filter_data_by_period(st.session_state.revenus_variables, 'date_creation')
-
-    # Revenus totaux
-    revenus_mensuels = sum(r['montant_mensuel'] for r in revenus)
-
-    # Cash flow mensuel total
-    cash_flow_mensuel = sum(p['cash_flow_mensuel'] for p in projets)
-
-    # Totaux par type
-    total_actifs = sum(p['montant_total'] for p in projets if p['type'] == 'Actif générateur')
-    total_passifs = sum(p['montant_total'] for p in projets if p['type'] == 'Passif')
-    total_formation = sum(p['montant_total'] for p in projets if p['type'] == 'Investissement formation')
-    total_global = total_actifs + total_passifs + total_formation
-
-    # Ratios
-    ratio_actifs_passifs = (total_actifs / total_global * 100) if total_global > 0 else 0
-
-    # Revenus passifs
-    revenus_passifs = sum(p['cash_flow_mensuel'] for p in projets if p['type'] == 'Actif générateur' and p['cash_flow_mensuel'] > 0)
-    revenus_passifs_pct = (revenus_passifs / revenus_mensuels * 100) if revenus_mensuels > 0 else 0
-
-    # Nombre d'actifs générateurs
-    nombre_actifs = len([p for p in projets if p['type'] == 'Actif générateur'])
-
-    # Phase financière
-    if cash_flow_mensuel < 0 or revenus_passifs_pct < 10:
-        phase_actuelle = 'Stabilisation'
-    elif cash_flow_mensuel >= 0 and 10 <= revenus_passifs_pct < 30:
-        phase_actuelle = 'Transition'  
+# Fonctions de calcul des KPIs
+def calculer_kpis(projets, revenus, mois_filtre=None, annee_filtre=None):
+    """Calcule tous les KPIs en fonction des filtres"""
+    
+    # Filtrer les données selon la période
+    projets_filtres = projets
+    revenus_filtres = revenus
+    
+    if mois_filtre and mois_filtre != "Tout":
+        revenus_filtres = [r for r in revenus if r.get('mois') == mois_filtre]
+    
+    if annee_filtre and annee_filtre != "Tout":
+        revenus_filtres = [r for r in revenus_filtres if r.get('annee') == annee_filtre]
+    
+    # Calculs des KPIs
+    total_revenus = sum(r.get('montant', 0) for r in revenus_filtres)
+    total_actifs = sum(p.get('montant_total', 0) for p in projets_filtres if p.get('type') == 'Actif générateur')
+    total_passifs = sum(p.get('montant_total', 0) for p in projets_filtres if p.get('type') == 'Passif')
+    total_investissements = sum(p.get('montant_total', 0) for p in projets_filtres if p.get('type') == 'Investissement')
+    
+    cash_flow_mensuel = sum(p.get('cash_flow_mensuel', 0) for p in projets_filtres)
+    revenus_passifs = sum(p.get('cash_flow_mensuel', 0) for p in projets_filtres if p.get('cash_flow_mensuel', 0) > 0)
+    
+    ratio_actifs_passifs = (total_actifs / max(total_passifs, 1)) * 100
+    ratio_revenus_passifs = (revenus_passifs / max(total_revenus, 1)) * 100 if total_revenus > 0 else 0
+    
+    # Phases
+    if cash_flow_mensuel < 0 and ratio_actifs_passifs < 20:
+        phase = "Stabilisation"
+    elif cash_flow_mensuel >= 0 and ratio_actifs_passifs >= 20 and ratio_actifs_passifs < 40:
+        phase = "Transition" 
     else:
-        phase_actuelle = 'Expansion'
-
+        phase = "Expansion"
+    
+    # Baby Steps Dave Ramsey
+    fonds_urgence = sum(p.get('montant_total', 0) for p in projets_filtres if 'urgence' in p.get('nom', '').lower())
+    baby_step = 1
+    if fonds_urgence >= 500000:  # 1000$ = ~500k FCFA
+        baby_step = 2
+    if fonds_urgence >= 3 * abs(cash_flow_mensuel):  # 3-6 mois de dépenses
+        baby_step = 3
+    
     return {
-        'revenus_mensuels': revenus_mensuels,
-        'cash_flow_mensuel': cash_flow_mensuel,
-        'ratio_actifs_passifs': ratio_actifs_passifs,
-        'revenus_passifs_pct': revenus_passifs_pct,
-        'nombre_actifs': nombre_actifs,
-        'phase_actuelle': phase_actuelle,
-        'fonds_urgence_mois': 0,
-        'baby_step_actuel': 1,
-        'depenses_mensuelles': abs(sum(p['cash_flow_mensuel'] for p in projets if p['cash_flow_mensuel'] < 0)),
+        'total_revenus': total_revenus,
         'total_actifs': total_actifs,
         'total_passifs': total_passifs,
-        'total_formation': total_formation
+        'total_investissements': total_investissements,
+        'cash_flow_mensuel': cash_flow_mensuel,
+        'revenus_passifs': revenus_passifs,
+        'ratio_actifs_passifs': ratio_actifs_passifs,
+        'ratio_revenus_passifs': ratio_revenus_passifs,
+        'phase': phase,
+        'baby_step': baby_step,
+        'fonds_urgence': fonds_urgence,
+        'nombre_actifs': len([p for p in projets_filtres if p.get('type') == 'Actif générateur'])
     }
 
-def format_currency(amount):
-    """Formate un montant en FCFA"""
-    return f"{amount:,.0f} FCFA".replace(",", " ")
-
-def categorize_project(projet):
-    """Catégorise un projet selon son état"""
-    aujourd_hui = date.today()
-    echeance = projet['echeance']
-
-    # Calcul progression
-    progression = (projet['montant_utilise_reel'] / projet['montant_total']) * 100 if projet['montant_total'] > 0 else 0
-
-    # Jours jusqu'à échéance
-    jours_restants = (echeance - aujourd_hui).days
-
-    # Logique de catégorisation
-    if echeance < aujourd_hui:
-        return 'en-retard', 'En Retard', '#ff4444'
-    elif jours_restants <= 30 and progression < 70:
-        return 'a-risque', 'À Risque', '#ff8800'
-    elif progression > 90:
-        return 'en-avance', 'En Avance', '#00aa00'
-    elif projet['montant_utilise_reel'] >= projet['montant_total']:
-        return 'bloque', 'Budget Épuisé', '#666666'
+def determiner_quadrant_kiyosaki(projets, revenus):
+    """Détermine le quadrant selon Kiyosaki"""
+    revenus_salaire = sum(r.get('montant', 0) for r in revenus if r.get('type') == 'Salaire')
+    revenus_business = sum(r.get('montant', 0) for r in revenus if r.get('type') == 'Business')
+    revenus_investissement = sum(r.get('montant', 0) for r in revenus if r.get('type') in ['Loyer', 'Investissement'])
+    total_revenus = revenus_salaire + revenus_business + revenus_investissement
+    
+    if total_revenus == 0:
+        return "E", "🐭 Rat Race - Aucun revenu"
+    
+    pct_salaire = (revenus_salaire / total_revenus) * 100
+    pct_business = (revenus_business / total_revenus) * 100
+    pct_investissement = (revenus_investissement / total_revenus) * 100
+    
+    if pct_salaire > 70:
+        quadrant = "E"
+        status = "🐭 Rat Race - Dépendant du salaire"
+    elif pct_business > 50:
+        quadrant = "S/B"
+        status = "⚡ En transition - Développement business"
+    elif pct_investissement > 40:
+        quadrant = "I"
+        status = "🎯 Liberté financière - Revenus passifs"
     else:
-        return 'en-cours', 'En Cours', '#007bff'
+        quadrant = "Mixte"
+        status = "🔄 En évolution - Portfolio diversifié"
+    
+    return quadrant, status
 
-def get_sources_financement():
-    """Retourne la liste des sources de financement disponibles"""
-    revenus = st.session_state.revenus_variables
-    return [r['nom'] for r in revenus] + ['Épargne', 'Crédit']
-
-def export_to_excel():
-    """Exporte toutes les données vers Excel"""
-    output = io.BytesIO()
-
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        # Onglet Projets
-        df_projets = pd.DataFrame(st.session_state.projets)
-        if not df_projets.empty:
-            df_projets['date_creation'] = pd.to_datetime(df_projets['date_creation']).dt.strftime('%Y-%m-%d %H:%M')
-            df_projets['date_modification'] = pd.to_datetime(df_projets['date_modification']).dt.strftime('%Y-%m-%d %H:%M')
-            df_projets['echeance'] = pd.to_datetime(df_projets['echeance']).dt.strftime('%Y-%m-%d')
-        df_projets.to_excel(writer, sheet_name='Projets', index=False)
-
-        # Onglet Revenus
-        df_revenus = pd.DataFrame(st.session_state.revenus_variables)
-        if not df_revenus.empty:
-            df_revenus['date_creation'] = pd.to_datetime(df_revenus['date_creation']).dt.strftime('%Y-%m-%d %H:%M')
-            df_revenus['date_modification'] = pd.to_datetime(df_revenus['date_modification']).dt.strftime('%Y-%m-%d %H:%M')
-        df_revenus.to_excel(writer, sheet_name='Revenus', index=False)
-
-        # Onglet KPIs
-        kpis = calculer_kpis()
-        df_kpis = pd.DataFrame([kpis])
-        df_kpis.to_excel(writer, sheet_name='KPIs', index=False)
-
-        # Onglet Configuration
-        df_config = pd.DataFrame([st.session_state.admin_config])
-        df_config.to_excel(writer, sheet_name='Configuration', index=False)
-
-        # Onglet Suivi détaillé
-        suivi_data = []
-        for projet in st.session_state.projets:
-            if projet.get('suivi_mensuel'):
-                for suivi in projet['suivi_mensuel']:
-                    suivi_data.append({
-                        'projet_id': projet['id'],
-                        'projet_nom': projet['nom'],
-                        'mois': suivi['mois'],
-                        'prevu': suivi['prevu'],
-                        'reel': suivi['reel'],
-                        'ecart': suivi['reel'] - suivi['prevu']
-                    })
-
-        if suivi_data:
-            df_suivi = pd.DataFrame(suivi_data)
-            df_suivi.to_excel(writer, sheet_name='Suivi_Mensuel', index=False)
-
-    return output.getvalue()
-
-# ============================================================================
-# SIDEBAR NAVIGATION
-# ============================================================================
-
-def render_sidebar():
-    """Affiche la sidebar avec navigation radio et filtre global amélioré"""
-    with st.sidebar:
-        st.markdown("### 💰 Plan Financier Familial")
-        st.markdown("*Alix & William - Vers l'Indépendance 2030*")
-
-        # Filtre global mois/année avec option "Tout"
-        st.markdown("---")
-        st.markdown("### 📅 Filtre Global")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            mois_options = ["Tout"] + [datetime(2025, x, 1).strftime('%B') for x in range(1, 13)]
-            mois_index = 0
-            if st.session_state.filter_month != "Tout":
-                try:
-                    mois_index = st.session_state.filter_month
-                except:
-                    mois_index = 0
-
-            selected_mois = st.selectbox("Mois", mois_options, index=mois_index)
-
-            if selected_mois == "Tout":
-                st.session_state.filter_month = "Tout"
-            else:
-                st.session_state.filter_month = mois_options.index(selected_mois)
-
-        with col2:
-            annee_options = ["Tout"] + [2024, 2025, 2026, 2027, 2028]
-            annee_index = 0
-            if st.session_state.filter_year != "Tout":
-                try:
-                    annee_index = annee_options.index(st.session_state.filter_year)
-                except:
-                    annee_index = 0
-
-            selected_annee = st.selectbox("Année", annee_options, index=annee_index)
-            st.session_state.filter_year = selected_annee
-
-        # Affichage période
-        if st.session_state.filter_month == "Tout" and st.session_state.filter_year == "Tout":
-            st.markdown("**📊 Période active:** Toutes les données")
-        elif st.session_state.filter_month == "Tout":
-            st.markdown(f"**📊 Période active:** Année {st.session_state.filter_year}")
-        elif st.session_state.filter_year == "Tout":
-            mois_nom = datetime(2025, st.session_state.filter_month, 1).strftime('%B')
-            st.markdown(f"**📊 Période active:** {mois_nom} (toutes années)")
-        else:
-            mois_nom = datetime(2025, st.session_state.filter_month, 1).strftime('%B')
-            st.markdown(f"**📊 Période active:** {mois_nom} {st.session_state.filter_year}")
-
-        # Navigation avec radio buttons
-        st.markdown("---")
-        pages = [
-            "📊 Dashboard Principal",
-            "📋 Vue Kanban Projets",
-            "💼 Gestion Projets", 
-            "💰 Revenus Variables",
-            "🎯 Conseils 3 Mentors",
-            "📈 Analytics & KPIs",
-            "🚀 Progression Familiale", 
-            "👨‍👩‍👧‍👦 Éducation Enfants",
-            "🔮 Vision 2030",
-            "⚙️ Administration"
-        ]
-
-        selected_page = st.radio(
-            "Navigation",
-            pages,
-            key="nav_radio",
-            label_visibility="collapsed"
-        )
-
-        # Phase actuelle
-        kpis = calculer_kpis()
-        phase = kpis['phase_actuelle']
-
-        st.markdown("---")
-        st.markdown(f"**🎯 Phase:** {phase}")
-        st.markdown(f"**💰 Revenus:** {format_currency(kpis['revenus_mensuels'])}")
-        st.markdown(f"**📊 Cash Flow:** {format_currency(kpis['cash_flow_mensuel'])}")
-
-    return selected_page
-
-# ============================================================================
-# PAGES DE L'APPLICATION (avec filtrage amélioré)
-# ============================================================================
-
+# Pages de l'application
 def show_dashboard():
-    """Page Dashboard Principal avec filtrage"""
-    st.title("📊 Dashboard Principal")
-
+    """Dashboard principal avec KPIs"""
+    st.markdown('<div class="main-header"><h1>📊 Dashboard Familial</h1></div>', unsafe_allow_html=True)
+    
+    # Calcul des KPIs avec filtre
+    mois_filtre = st.session_state.get('mois_filtre')
+    annee_filtre = st.session_state.get('annee_filtre')
+    kpis = calculer_kpis(st.session_state.projets, st.session_state.revenus, mois_filtre, annee_filtre)
+    
     # Affichage période active
-    if st.session_state.filter_month == "Tout" and st.session_state.filter_year == "Tout":
-        st.markdown("**📅 Période:** Toutes les données")
-    else:
-        periode_str = ""
-        if st.session_state.filter_month != "Tout":
-            periode_str += datetime(2025, st.session_state.filter_month, 1).strftime('%B')
-        if st.session_state.filter_year != "Tout":
-            if periode_str:
-                periode_str += f" {st.session_state.filter_year}"
-            else:
-                periode_str = f"Année {st.session_state.filter_year}"
-        st.markdown(f"**📅 Période:** {periode_str}")
-
-    # KPIs avec données filtrées
-    kpis = calculer_kpis()
-
+    periode = "Toutes les données"
+    if mois_filtre and mois_filtre != "Tout" and annee_filtre and annee_filtre != "Tout":
+        periode = f"{mois_filtre} {annee_filtre}"
+    elif mois_filtre and mois_filtre != "Tout":
+        periode = f"Tous les {mois_filtre}"
+    elif annee_filtre and annee_filtre != "Tout":
+        periode = f"Année {annee_filtre}"
+    
+    st.info(f"📅 **Période active :** {periode}")
+    
+    # Métriques principales
     col1, col2, col3, col4 = st.columns(4)
-
+    
     with col1:
-        delta_color = "normal" if kpis['cash_flow_mensuel'] >= 0 else "inverse"
-        st.metric(
-            "💸 Cash Flow Mensuel", 
-            format_currency(kpis['cash_flow_mensuel']), 
-            delta=f"Objectif: {format_currency(st.session_state.admin_config['kpis_config']['objectif_cash_flow'])}",
-            delta_color=delta_color
-        )
-
+        st.metric("💰 Cash Flow Mensuel", 
+                 f"{kpis['cash_flow_mensuel']:,.0f} FCFA",
+                 delta="Positif" if kpis['cash_flow_mensuel'] > 0 else "Négatif")
+    
     with col2:
-        st.metric(
-            "⚖️ Ratio Actifs/Passifs", 
-            f"{kpis['ratio_actifs_passifs']:.1f}%", 
-            delta=f"Objectif: >{st.session_state.admin_config['kpis_config']['objectif_ratio_actifs']}%"
-        )
-
+        st.metric("📈 Ratio Actifs/Passifs", 
+                 f"{kpis['ratio_actifs_passifs']:.1f}%",
+                 delta="Bon" if kpis['ratio_actifs_passifs'] > 50 else "À améliorer")
+    
     with col3:
-        st.metric(
-            "💰 Revenus Passifs", 
-            f"{kpis['revenus_passifs_pct']:.1f}%", 
-            delta=f"Objectif: {st.session_state.admin_config['kpis_config']['objectif_revenus_passifs']}%"
-        )
-
+        st.metric("🎯 Revenus Passifs", 
+                 f"{kpis['ratio_revenus_passifs']:.1f}%",
+                 delta="Objectif: 30%")
+    
     with col4:
-        st.metric(
-            "🎯 Phase", 
-            kpis['phase_actuelle'],
-            delta=f"Baby Step {kpis['baby_step_actuel']}/7"
-        )
-
-    # Graphiques avec données filtrées
+        phase_color = {"Stabilisation": "🔴", "Transition": "🟡", "Expansion": "🟢"}
+        st.metric("🚀 Phase Actuelle", 
+                 f"{phase_color.get(kpis['phase'], '🔵')} {kpis['phase']}",
+                 delta="Baby Step " + str(kpis['baby_step']))
+    
+    # Graphiques
     col1, col2 = st.columns(2)
-
+    
     with col1:
-        st.subheader("📈 Évolution Cash Flow")
-
-        import numpy as np
-        mois = pd.date_range(start='2024-01-01', end='2024-12-01', freq='MS')
-        cash_flow_evolution = np.random.normal(kpis['cash_flow_mensuel'], 500000, len(mois))
-
-        fig = px.line(
-            x=mois, 
-            y=cash_flow_evolution,
-            title="Cash Flow Mensuel (FCFA)"
+        st.subheader("📊 Répartition Financière")
+        fig_pie = px.pie(
+            values=[kpis['total_actifs'], kpis['total_passifs'], kpis['total_investissements']],
+            names=['Actifs générateurs', 'Passifs', 'Investissements'],
+            colors=['#28a745', '#dc3545', '#ffc107']
         )
-        fig.add_hline(y=0, line_dash="dash", annotation_text="Équilibre")
-        st.plotly_chart(fig, use_container_width=True)
-
+        st.plotly_chart(fig_pie, use_container_width=True)
+    
     with col2:
-        st.subheader("🥧 Répartition Investissements")
-
-        if kpis['total_actifs'] + kpis['total_passifs'] + kpis['total_formation'] > 0:
-            fig = px.pie(
-                values=[kpis['total_actifs'], kpis['total_passifs'], kpis['total_formation']],
-                names=['Actifs Générateurs', 'Passifs', 'Formation'],
-                color_discrete_map={
-                    'Actifs Générateurs': '#1FB8CD',
-                    'Passifs': '#B4413C', 
-                    'Formation': '#FFC185'
-                }
-            )
-            st.plotly_chart(fig, use_container_width=True)
+        st.subheader("📈 Évolution Cash Flow")
+        mois = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+        cash_flow_data = [kpis['cash_flow_mensuel'] + np.random.randint(-100000, 100000) for _ in mois]
+        
+        fig_line = px.line(x=mois, y=cash_flow_data, title="Projection Cash Flow 2025")
+        fig_line.add_hline(y=0, line_dash="dash", line_color="red")
+        st.plotly_chart(fig_line, use_container_width=True)
 
 def show_kanban_view():
-    """Vue Kanban des projets avec catégorisation avancée et filtrage"""
-    st.title("📋 Vue Kanban - Gestion Visuelle des Projets")
-
-    # Affichage période
-    if st.session_state.filter_month == "Tout" and st.session_state.filter_year == "Tout":
-        st.markdown("**📅 Période:** Toutes les données")
-    else:
-        periode_str = ""
-        if st.session_state.filter_month != "Tout":
-            periode_str += datetime(2025, st.session_state.filter_month, 1).strftime('%B')
-        if st.session_state.filter_year != "Tout":
-            if periode_str:
-                periode_str += f" {st.session_state.filter_year}"
-            else:
-                periode_str = f"Année {st.session_state.filter_year}"
-        st.markdown(f"**📅 Période:** {periode_str}")
-
-    # Filtrer projets selon période
-    projets_filtered = filter_data_by_period(st.session_state.projets, 'date_creation')
-
-    # Catégorisation des projets filtrés
+    """Vue Kanban avec colonnes par statut"""
+    st.markdown('<div class="main-header"><h1>📋 Vue Kanban Projets</h1></div>', unsafe_allow_html=True)
+    
+    # Filtrage des projets
+    mois_filtre = st.session_state.get('mois_filtre')
+    annee_filtre = st.session_state.get('annee_filtre')
+    projets_filtres = st.session_state.projets
+    
+    # Catégorisation des projets
     categories = {
-        'en-retard': {'projets': [], 'titre': '🔴 En Retard', 'couleur': '#ff4444'},
-        'a-risque': {'projets': [], 'titre': '🟡 À Risque', 'couleur': '#ff8800'},
-        'en-cours': {'projets': [], 'titre': '🔵 En Cours', 'couleur': '#007bff'},
-        'en-avance': {'projets': [], 'titre': '🟢 En Avance', 'couleur': '#00aa00'},
-        'bloque': {'projets': [], 'titre': '⚫ Bloqué', 'couleur': '#666666'}
+        'En Retard': {'projets': [], 'couleur': '#dc3545', 'icone': '🔴'},
+        'À Risque': {'projets': [], 'couleur': '#ffc107', 'icone': '🟡'},
+        'En Cours': {'projets': [], 'couleur': '#17a2b8', 'icone': '🔵'},
+        'En Avance': {'projets': [], 'couleur': '#28a745', 'icone': '🟢'},
+        'Bloqué': {'projets': [], 'couleur': '#6c757d', 'icone': '⚫'}
     }
-
-    # Répartition des projets
-    for projet in projets_filtered:
-        categorie, _, _ = categorize_project(projet)
-        if categorie in categories:
-            categories[categorie]['projets'].append(projet)
+    
+    today = date.today()
+    
+    for projet in projets_filtres:
+        echeance = projet.get('echeance', today)
+        if isinstance(echeance, str):
+            try:
+                echeance = datetime.strptime(echeance, '%Y-%m-%d').date()
+            except:
+                echeance = today
+        
+        # Logique de catégorisation
+        if echeance < today:
+            categories['En Retard']['projets'].append(projet)
+        elif projet.get('statut') == 'Suspendu' or projet.get('montant_utilise_reel', 0) >= projet.get('montant_total', 1):
+            categories['Bloqué']['projets'].append(projet)
+        elif projet.get('statut') == 'Terminé':
+            categories['En Avance']['projets'].append(projet)
+        elif (echeance - today).days < 30:
+            categories['À Risque']['projets'].append(projet)
         else:
-            categories['en-cours']['projets'].append(projet)
-
-    # Affichage en colonnes
-    colonnes = st.columns(len(categories))
-
-    for i, (cat_key, cat_data) in enumerate(categories.items()):
+            categories['En Cours']['projets'].append(projet)
+    
+    # Affichage des statistiques
+    col1, col2, col3, col4, col5 = st.columns(5)
+    colonnes = [col1, col2, col3, col4, col5]
+    
+    for i, (nom_cat, cat_data) in enumerate(categories.items()):
         with colonnes[i]:
-            st.markdown(f"### {cat_data['titre']} ({len(cat_data['projets'])})")
-
-            if cat_data['projets']:
-                for projet in cat_data['projets']:
-                    show_kanban_card(projet, cat_data['couleur'], cat_key)
-            else:
-                st.info("Aucun projet dans cette catégorie")
-
-    # Statistiques avec données filtrées
+            st.markdown(f"""
+            <div class="metric-card" style="text-align: center;">
+                <h3>{cat_data['icone']} {nom_cat}</h3>
+                <h2 style="color: {cat_data['couleur']};">{len(cat_data['projets'])}</h2>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # Colonnes Kanban
     st.markdown("---")
-    st.subheader("📊 Statistiques Projet")
+    cols = st.columns(5)
+    
+    for i, (nom_cat, cat_data) in enumerate(categories.items()):
+        with cols[i]:
+            st.markdown(f"""
+            <div class="kanban-column">
+                <h4 style="color: {cat_data['couleur']};">{cat_data['icone']} {nom_cat} ({len(cat_data['projets'])})</h4>
+            """, unsafe_allow_html=True)
+            
+            for projet in cat_data['projets']:
+                show_kanban_card(projet, cat_data['couleur'])
+            
+            st.markdown("</div>", unsafe_allow_html=True)
 
-    col1, col2, col3, col4 = st.columns(4)
-
-    total_projets = len(projets_filtered)
-
-    with col1:
-        st.metric("Total Projets", total_projets)
-
-    with col2:
-        en_retard = len(categories['en-retard']['projets'])
-        st.metric("En Retard", en_retard, delta=f"{(en_retard/total_projets*100):.0f}%" if total_projets > 0 else "0%")
-
-    with col3:
-        a_risque = len(categories['a-risque']['projets'])
-        st.metric("À Risque", a_risque, delta=f"{(a_risque/total_projets*100):.0f}%" if total_projets > 0 else "0%")
-
-    with col4:
-        en_avance = len(categories['en-avance']['projets'])
-        st.metric("En Avance", en_avance, delta=f"{(en_avance/total_projets*100):.0f}%" if total_projets > 0 else "0%")
-
-def show_kanban_card(projet, couleur, categorie):
-    """Affiche une carte Kanban pour un projet avec gestion sécurisée des champs"""
-    progression = (projet['montant_utilise_reel'] / projet['montant_total']) * 100 if projet['montant_total'] > 0 else 0
-
-    # Calcul jours restants
-    jours_restants = (projet['echeance'] - date.today()).days
-
-    # CSS class pour la catégorie
+def show_kanban_card(projet, couleur):
+    """Affiche une carte projet dans le Kanban"""
+    type_icons = {
+        'Actif générateur': '📈',
+        'Passif': '📉', 
+        'Investissement': '🎓'
+    }
+    
     with st.container():
-        # En-tête carte
-        col1, col2 = st.columns([3, 1])
-
-        with col1:
-            st.markdown(f"**{projet['nom']}**")
-
-        with col2:
-            # Type badge
-            type_colors = {
-                'Actif générateur': '🟢',
-                'Passif': '🔴',
-                'Investissement formation': '🔵'
-            }
-            st.markdown(f"{type_colors.get(projet['type'], '⚪')} {projet['type'][:8]}...")
-
-        # Infos projet
-        st.markdown(f"💰 **Budget:** {format_currency(projet['montant_total'])}")
-        st.markdown(f"💸 **Utilisé:** {format_currency(projet['montant_utilise_reel'])}")
-        st.markdown(f"📅 **Échéance:** {projet['echeance'].strftime('%d/%m/%Y')}")
-        st.markdown(f"⏰ **Jours restants:** {jours_restants}")
-        st.markdown(f"👤 **Responsable:** {safe_get(projet, 'responsable', 'Non défini')}")
-
-        # Barre de progression
-        st.progress(progression / 100)
-        st.markdown(f"📊 **Progression:** {progression:.1f}%")
-
-        # Source financement (gestion sécurisée)
-        source_financement = safe_get(projet, 'source_financement', 'Non défini')
-        st.markdown(f"🏦 **Financement:** {source_financement}")
-
-        # Actions
+        st.markdown(f"""
+        <div class="kanban-card" style="border-left-color: {couleur};">
+            <h5>{type_icons.get(projet.get('type', ''), '📋')} {projet.get('nom', 'Projet')}</h5>
+            <p><strong>Budget:</strong> {projet.get('montant_total', 0):,.0f} FCFA</p>
+            <p><strong>Utilisé:</strong> {projet.get('montant_utilise_reel', 0):,.0f} FCFA</p>
+            <p><strong>Échéance:</strong> {projet.get('echeance', 'Non définie')}</p>
+            <p><strong>Financement:</strong> {safe_get(projet, 'source_financement', 'Non défini')}</p>
+            <p><strong>Responsable:</strong> {safe_get(projet, 'responsable', 'Non défini')}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
         col1, col2 = st.columns(2)
-
         with col1:
-            if st.button("✏️ Modifier", key=f"kanban_edit_{projet['id']}"):
-                st.session_state.edit_project_id = projet['id']
-                st.session_state.current_page = "💼 Gestion Projets"
+            if st.button("✏️ Modifier", key=f"edit_kanban_{projet.get('id', 'temp')}"):
+                st.session_state.edit_project_id = projet.get('id')
                 st.rerun()
-
         with col2:
-            if st.button("📊 Détails", key=f"kanban_details_{projet['id']}"):
-                st.session_state.show_details_id = projet['id']
-
-        st.markdown("---")
-
-        # Modal détails
-        if st.session_state.get('show_details_id') == projet['id']:
-            show_project_details_modal(projet)
+            if st.button("👁️ Détails", key=f"view_kanban_{projet.get('id', 'temp')}"):
+                show_project_details_modal(projet)
 
 def show_project_details_modal(projet):
-    """Affiche les détails d'un projet dans un expander"""
-    with st.expander(f"📊 Détails: {projet['nom']}", expanded=True):
-
+    """Affiche les détails complets d'un projet"""
+    with st.expander(f"📋 Détails: {projet.get('nom', 'Projet')}", expanded=True):
         col1, col2 = st.columns(2)
-
+        
         with col1:
-            st.markdown("### 💰 Informations Financières")
-            st.write(f"**Budget Total:** {format_currency(projet['montant_total'])}")
-            st.write(f"**Budget Mensuel:** {format_currency(projet['budget_alloue_mensuel'])}")
-            st.write(f"**Utilisé Réel:** {format_currency(projet['montant_utilise_reel'])}")
-            st.write(f"**Cash Flow/Mois:** {format_currency(projet['cash_flow_mensuel'])}")
-            st.write(f"**ROI Attendu:** {projet['roi_attendu']}%")
-
-        with col2:
-            st.markdown("### 📋 Informations Projet")
-            st.write(f"**Statut:** {projet['statut']}")
-            st.write(f"**Priorité:** {safe_get(projet, 'priorite', 'Non définie')}")
-            st.write(f"**Échéance:** {projet['echeance'].strftime('%d/%m/%Y')}")
+            st.write(f"**Type:** {projet.get('type', 'Non défini')}")
+            st.write(f"**Statut:** {projet.get('statut', 'Non défini')}")
+            st.write(f"**Priorité:** {projet.get('priorite', 'Non définie')}")
+            st.write(f"**Catégorie:** {projet.get('categorie', 'Non définie')}")
             st.write(f"**Responsable:** {safe_get(projet, 'responsable', 'Non défini')}")
-            st.write(f"**Source Financement:** {safe_get(projet, 'source_financement', 'Non définie')}")
-
-        # Dates de gestion
-        st.markdown("### 📅 Gestion")
-        col1, col2 = st.columns(2)
-        with col1:
-            date_creation = safe_get(projet, 'date_creation', datetime.now())
-            if isinstance(date_creation, str):
-                date_creation = datetime.strptime(date_creation, '%Y-%m-%d %H:%M:%S')
-            st.write(f"**Créé le:** {date_creation.strftime('%d/%m/%Y %H:%M')}")
-
+        
         with col2:
-            date_modification = safe_get(projet, 'date_modification', datetime.now())
-            if isinstance(date_modification, str):
-                date_modification = datetime.strptime(date_modification, '%Y-%m-%d %H:%M:%S')
-            st.write(f"**Modifié le:** {date_modification.strftime('%d/%m/%Y %H:%M')}")
-
-        st.markdown("### 📝 Description")
-        st.write(projet['description'])
-
-        # Bouton fermer
-        if st.button("❌ Fermer", key=f"close_details_{projet['id']}"):
-            if 'show_details_id' in st.session_state:
-                del st.session_state.show_details_id
-            st.rerun()
+            st.write(f"**Budget total:** {projet.get('montant_total', 0):,.0f} FCFA")
+            st.write(f"**Utilisé réel:** {projet.get('montant_utilise_reel', 0):,.0f} FCFA")
+            st.write(f"**Cash flow mensuel:** {projet.get('cash_flow_mensuel', 0):,.0f} FCFA")
+            st.write(f"**ROI attendu:** {projet.get('roi_attendu', 0):.1f}%")
+            st.write(f"**Échéance:** {projet.get('echeance', 'Non définie')}")
+        
+        if projet.get('description'):
+            st.write(f"**Description:** {projet.get('description')}")
+        
+        # Dates de gestion
+        if safe_get(projet, 'date_creation'):
+            st.write(f"**Créé le:** {projet['date_creation'].strftime('%d/%m/%Y à %H:%M')}")
+        if safe_get(projet, 'date_modification'):
+            st.write(f"**Modifié le:** {projet['date_modification'].strftime('%d/%m/%Y à %H:%M')}")
 
 def show_project_management():
-    """Page Gestion Projets CRUD complète avec filtrage"""
-    st.title("💼 Gestion des Projets")
-
-    # Affichage période
-    if st.session_state.filter_month == "Tout" and st.session_state.filter_year == "Tout":
-        st.markdown("**📅 Période:** Toutes les données")
-    else:
-        periode_str = ""
-        if st.session_state.filter_month != "Tout":
-            periode_str += datetime(2025, st.session_state.filter_month, 1).strftime('%B')
-        if st.session_state.filter_year != "Tout":
-            if periode_str:
-                periode_str += f" {st.session_state.filter_year}"
-            else:
-                periode_str = f"Année {st.session_state.filter_year}"
-        st.markdown(f"**📅 Période:** {periode_str}")
-
-    # Actions principales
-    col1, col2 = st.columns([3, 1])
-    with col2:
-        if st.button("➕ Nouveau Projet", type="primary"):
+    """Gestion des projets avec CRUD complet"""
+    st.markdown('<div class="main-header"><h1>💼 Gestion des Projets</h1></div>', unsafe_allow_html=True)
+    
+    # Si en mode édition
+    if st.session_state.edit_project_id:
+        show_edit_project_form()
+        return
+    
+    # Bouton ajouter et filtres
+    col1, col2, col3 = st.columns([2, 1, 1])
+    
+    with col1:
+        if st.button("➕ Ajouter un nouveau projet", type="primary"):
             st.session_state.show_add_form = True
-
-    # Gestion des modals
+    
+    with col2:
+        type_filter = st.selectbox("Filtrer par type", ["Tous"] + st.session_state.config_admin['listes']['types_projets'])
+    
+    with col3:
+        statut_filter = st.selectbox("Filtrer par statut", ["Tous"] + st.session_state.config_admin['listes']['statuts'])
+    
+    # Formulaire d'ajout
     if st.session_state.get('show_add_form', False):
         show_add_project_form()
+    
+    st.markdown("---")
+    
+    # Liste des projets
+    projets_filtres = st.session_state.projets
+    if type_filter != "Tous":
+        projets_filtres = [p for p in projets_filtres if p.get('type') == type_filter]
+    if statut_filter != "Tous":
+        projets_filtres = [p for p in projets_filtres if p.get('statut') == statut_filter]
+    
+    if not projets_filtres:
+        st.info("Aucun projet trouvé avec les filtres sélectionnés.")
+        return
+    
+    for projet in projets_filtres:
+        show_project_card_native(projet)
 
-    if st.session_state.get('edit_project_id'):
-        show_edit_project_form()
-
-    # Filtres
-    st.subheader("🔍 Filtres")
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        filter_type = st.selectbox(
-            "Type", 
-            ["Tous"] + st.session_state.admin_config['listes_config']['types_projet']
-        )
-
-    with col2:
-        filter_status = st.selectbox(
-            "Statut",
-            ["Tous"] + st.session_state.admin_config['listes_config']['statuts_projet']
-        )
-
-    with col3:
-        filter_priority = st.selectbox(
-            "Priorité",
-            ["Toutes"] + st.session_state.admin_config['listes_config']['priorites']
-        )
-
-    with col4:
-        sort_by = st.selectbox(
-            "Trier par",
-            ["Nom", "Montant", "Échéance", "ROI", "Type", "Date création"]
-        )
-
-    # Application des filtres avec filtrage par période
-    projets_base = filter_data_by_period(st.session_state.projets, 'date_creation')
-    projets_filtered = filter_projects(projets_base, filter_type, filter_status, filter_priority, sort_by)
-
-    # Affichage des projets
-    st.subheader(f"📋 Projets ({len(projets_filtered)})")
-
-    if projets_filtered:
-        for projet in projets_filtered:
-            show_project_card_native(projet)
-    else:
-        st.info("Aucun projet ne correspond aux filtres sélectionnés.")
+def show_add_project_form():
+    """Formulaire d'ajout de projet avec validation améliorée"""
+    st.subheader("➕ Nouveau Projet")
+    
+    with st.form("add_project_form", clear_on_submit=False):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            nom = st.text_input("*Nom du projet", help="Nom descriptif du projet")
+            type_projet = st.selectbox("*Type", st.session_state.config_admin['listes']['types_projets'])
+            montant_total = st.number_input("*Budget total (FCFA)", min_value=0, value=0, step=1000)
+            cash_flow = st.number_input("Cash flow mensuel (FCFA)", value=0, step=1000, 
+                                      help="Positif = génère des revenus, Négatif = coûte de l'argent")
+            roi_attendu = st.number_input("ROI attendu (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.1)
+        
+        with col2:
+            statut = st.selectbox("*Statut", st.session_state.config_admin['listes']['statuts'])
+            priorite = st.selectbox("*Priorité", st.session_state.config_admin['listes']['priorites'])
+            categorie = st.selectbox("*Catégorie", st.session_state.config_admin['listes']['categories'])
+            echeance = st.date_input("*Échéance", value=date.today() + timedelta(days=30))
+            source_financement = st.selectbox("Source de financement", 
+                                            ["Non défini"] + [r['nom'] for r in st.session_state.revenus])
+            responsable = st.selectbox("*Responsable", st.session_state.config_admin['listes']['responsables'])
+        
+        description = st.text_area("Description", help="Description détaillée du projet")
+        
+        submitted = st.form_submit_button("✅ Créer le projet", type="primary")
+        
+        if submitted:
+            # Validation améliorée
+            champs_obligatoires = {
+                'nom': nom,
+                'type_projet': type_projet,
+                'montant_total': montant_total,
+                'statut': statut,
+                'priorite': priorite,
+                'categorie': categorie,
+                'responsable': responsable
+            }
+            
+            champs_manquants = [k for k, v in champs_obligatoires.items() if not v or v == 0]
+            
+            if champs_manquants:
+                champs_manquants_str = ", ".join([
+                    "Nom" if k == "nom" else
+                    "Type" if k == "type_projet" else
+                    "Budget total" if k == "montant_total" else
+                    "Statut" if k == "statut" else
+                    "Priorité" if k == "priorite" else
+                    "Catégorie" if k == "categorie" else
+                    "Responsable" if k == "responsable" else k
+                    for k in champs_manquants
+                ])
+                st.error(f"⚠️ Champs manquants: {champs_manquants_str}")
+                return
+            
+            # Création du projet
+            nouveau_projet = {
+                'id': str(uuid.uuid4()),
+                'nom': nom,
+                'type': type_projet,
+                'montant_total': int(montant_total),
+                'budget_alloue_mensuel': int(montant_total / 12) if montant_total > 0 else 0,
+                'montant_utilise_reel': 0,
+                'cash_flow_mensuel': int(cash_flow),
+                'roi_attendu': float(roi_attendu),
+                'statut': statut,
+                'priorite': priorite,
+                'echeance': echeance,
+                'categorie': categorie,
+                'description': description,
+                'source_financement': source_financement,
+                'responsable': responsable,
+                'date_creation': datetime.now(),
+                'date_modification': datetime.now(),
+                'suivi_mensuel': []
+            }
+            
+            st.session_state.projets.append(nouveau_projet)
+            st.session_state.show_add_form = False
+            st.success(f"✅ Projet '{nom}' créé avec succès!")
+            st.rerun()
+        
+        if st.form_submit_button("❌ Annuler"):
+            st.session_state.show_add_form = False
+            st.rerun()
 
 def show_project_card_native(projet):
     """Affiche une carte projet avec composants Streamlit natifs"""
-
-    # Calculs
-    delta_budget = projet['montant_total'] - projet['montant_utilise_reel']
-    progress = (projet['montant_utilise_reel'] / projet['montant_total']) * 100 if projet['montant_total'] > 0 else 0
-
-    # Container principal
+    type_styles = {
+        'Actif générateur': ('actif-card', '📈', '#28a745'),
+        'Passif': ('passif-card', '📉', '#dc3545'),
+        'Investissement': ('investissement-card', '🎓', '#ffc107')
+    }
+    
+    card_class, icon, color = type_styles.get(projet.get('type', ''), ('project-card', '📋', '#20b2aa'))
+    
     with st.container():
-        # En-tête avec nom et type
-        col1, col2, col3 = st.columns([2, 1, 1])
-
-        with col1:
-            st.subheader(f"🎯 {projet['nom']}")
-            st.caption(f"👤 {safe_get(projet, 'responsable', 'Non défini')}")
-
-        with col2:
-            # Badge type
-            type_colors = {
-                'Actif générateur': '🟢',
-                'Passif': '🔴',
-                'Investissement formation': '🔵'
-            }
-            st.markdown(f"{type_colors.get(projet['type'], '⚪')} **{projet['type']}**")
-
-        with col3:
-            # Badge statut
-            status_colors = {
-                'Planifié': '🔵',
-                'En cours': '🟡', 
-                'Développement': '🟠',
-                'Réalisé': '🟢',
-                'Suspendu': '🔴'
-            }
-            st.markdown(f"{status_colors.get(projet['statut'], '⚪')} {projet['statut']}")
-
-        # Métriques financières
-        col1, col2, col3, col4 = st.columns(4)
-
-        with col1:
-            st.metric("💰 Budget Total", format_currency(projet['montant_total']))
-
-        with col2:
-            st.metric("💸 Utilisé", format_currency(projet['montant_utilise_reel']))
-
-        with col3:
-            st.metric("📊 Delta", format_currency(delta_budget))
-
-        with col4:
-            cash_flow_color = "normal" if projet['cash_flow_mensuel'] >= 0 else "inverse"
-            st.metric(
-                "💵 Cash Flow/Mois", 
-                format_currency(projet['cash_flow_mensuel']),
-                delta_color=cash_flow_color
-            )
-
-        # Barre de progression
-        st.write(f"**Progression: {progress:.1f}%**")
-        st.progress(progress / 100)
-
-        # Description
-        st.write(f"**Description:** {projet['description']}")
-
-        # Infos supplémentaires
+        st.markdown(f"""
+        <div class="project-card {card_class}">
+            <h4>{icon} {projet.get('nom', 'Projet sans nom')}</h4>
+            <div style="color: {color}; font-weight: bold;">Type: {projet.get('type', 'Non défini')}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Informations détaillées
         col1, col2, col3 = st.columns(3)
-
+        
         with col1:
-            st.write(f"📅 **Échéance:** {projet['echeance'].strftime('%d/%m/%Y')}")
-
+            st.write(f"**💰 Budget:** {projet.get('montant_total', 0):,.0f} FCFA")
+            st.write(f"**📊 Utilisé:** {projet.get('montant_utilise_reel', 0):,.0f} FCFA")
+            st.write(f"**💵 Cash flow:** {projet.get('cash_flow_mensuel', 0):,.0f} FCFA/mois")
+        
         with col2:
-            st.write(f"📊 **ROI:** {projet['roi_attendu']}%")
-
+            st.write(f"**📈 ROI:** {projet.get('roi_attendu', 0):.1f}%")
+            st.write(f"**📅 Échéance:** {projet.get('echeance', 'Non définie')}")
+            st.write(f"**🎯 Statut:** {projet.get('statut', 'Non défini')}")
+        
         with col3:
-            # Gestion sécurisée du financement
-            source_financement = safe_get(projet, 'source_financement', 'Non défini')
-            st.write(f"🏦 **Financement:** {source_financement}")
-
-        # Dates de gestion
-        col1, col2 = st.columns(2)
+            st.write(f"**🔥 Priorité:** {projet.get('priorite', 'Non définie')}")
+            st.write(f"**🏦 Financement:** {safe_get(projet, 'source_financement', 'Non défini')}")
+            st.write(f"**👤 Responsable:** {safe_get(projet, 'responsable', 'Non défini')}")
+        
+        if projet.get('description'):
+            st.write(f"**📝 Description:** {projet.get('description')}")
+        
+        # Dates de création et modification
+        if safe_get(projet, 'date_creation'):
+            st.caption(f"📅 Créé le {projet['date_creation'].strftime('%d/%m/%Y à %H:%M')}")
+        if safe_get(projet, 'date_modification') and projet['date_modification'] != projet.get('date_creation'):
+            st.caption(f"📝 Modifié le {projet['date_modification'].strftime('%d/%m/%Y à %H:%M')}")
+        
+        # Conseils des mentors
+        show_mentors_advice(projet)
+        
+        # Boutons d'action
+        col1, col2, col3 = st.columns(3)
         with col1:
-            date_creation = safe_get(projet, 'date_creation', datetime.now())
-            if isinstance(date_creation, str):
-                date_creation = datetime.strptime(date_creation, '%Y-%m-%d %H:%M:%S')
-            st.caption(f"📅 Créé: {date_creation.strftime('%d/%m/%Y %H:%M')}")
-
-        with col2:
-            date_modification = safe_get(projet, 'date_modification', datetime.now())
-            if isinstance(date_modification, str):
-                date_modification = datetime.strptime(date_modification, '%Y-%m-%d %H:%M:%S')
-            st.caption(f"🔄 Modifié: {date_modification.strftime('%d/%m/%Y %H:%M')}")
-
-        # Actions
-        col1, col2, col3, col4 = st.columns(4)
-
-        with col1:
-            if st.button("✏️ Modifier", key=f"edit_{projet['id']}"):
-                st.session_state.edit_project_id = projet['id']
+            if st.button("✏️ Modifier", key=f"edit_project_{projet.get('id')}"):
+                st.session_state.edit_project_id = projet.get('id')
                 st.rerun()
-
         with col2:
-            if st.button("🗑️ Supprimer", key=f"delete_{projet['id']}"):
-                if st.session_state.get(f"confirm_delete_{projet['id']}", False):
-                    # Suppression confirmée
-                    st.session_state.projets = [p for p in st.session_state.projets if p['id'] != projet['id']]
-                    st.success(f"Projet '{projet['nom']}' supprimé.")
-                    if f"confirm_delete_{projet['id']}" in st.session_state:
-                        del st.session_state[f"confirm_delete_{projet['id']}"]
+            if st.button("🗑️ Supprimer", key=f"delete_project_{projet.get('id')}"):
+                if st.session_state.get(f"confirm_delete_{projet.get('id')}", False):
+                    st.session_state.projets = [p for p in st.session_state.projets if p.get('id') != projet.get('id')]
+                    if f"confirm_delete_{projet.get('id')}" in st.session_state:
+                        del st.session_state[f"confirm_delete_{projet.get('id')}"]
+                    st.success(f"Projet '{projet.get('nom')}' supprimé!")
                     st.rerun()
                 else:
-                    # Demande de confirmation
-                    st.session_state[f"confirm_delete_{projet['id']}"] = True
-                    st.warning("Cliquez à nouveau pour confirmer la suppression.")
-
+                    st.session_state[f"confirm_delete_{projet.get('id')}"] = True
+                    st.warning("⚠️ Cliquez à nouveau pour confirmer la suppression")
         with col3:
-            if st.button("📊 Suivi", key=f"suivi_{projet['id']}"):
-                st.session_state.show_suivi_id = projet['id']
-
-        with col4:
-            if st.button("🎯 Conseils", key=f"advice_{projet['id']}"):
-                st.session_state.show_advice_id = projet['id']
-
-    # Affichage conditionnel du suivi
-    if st.session_state.get('show_suivi_id') == projet['id']:
-        show_project_tracking(projet)
-
-    # Affichage conditionnel des conseils
-    if st.session_state.get('show_advice_id') == projet['id']:
-        show_project_advice(projet)
-
-    st.markdown("---")
-
-def show_project_tracking(projet):
-    """Affiche le suivi mensuel d'un projet"""
-    with st.expander(f"📊 Suivi Mensuel: {projet['nom']}", expanded=True):
-
-        # Filtre par mois/année sélectionnée
-        filtered_suivi = []
-        if st.session_state.filter_year != "Tout" and st.session_state.filter_month != "Tout":
-            target_month = f"{st.session_state.filter_year}-{st.session_state.filter_month:02d}"
-
-            if projet['suivi_mensuel']:
-                filtered_suivi = [s for s in projet['suivi_mensuel'] if s['mois'].startswith(target_month[:7])]
-        else:
-            filtered_suivi = projet.get('suivi_mensuel', [])
-
-        if filtered_suivi:
-            df_suivi = pd.DataFrame(filtered_suivi)
-            df_suivi['écart'] = df_suivi['reel'] - df_suivi['prevu']
-            df_suivi['% écart'] = (df_suivi['écart'] / df_suivi['prevu'] * 100).round(1)
-
-            st.dataframe(df_suivi, use_container_width=True)
-
-            # Graphique évolution
-            fig = px.bar(
-                df_suivi,
-                x='mois',
-                y=['prevu', 'reel'],
-                title=f"Prévisionnel vs Réel",
-                barmode='group'
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Aucun suivi pour la période sélectionnée.")
-
-        # Ajouter une entrée de suivi
-        if st.session_state.filter_year != "Tout" and st.session_state.filter_month != "Tout":
-            st.subheader(f"➕ Ajouter Suivi pour {datetime(st.session_state.filter_year, st.session_state.filter_month, 1).strftime('%B %Y')}")
-
-            with st.form(f"suivi_form_{projet['id']}"):
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    montant_prevu = st.number_input("Montant Prévu (FCFA)", min_value=0, step=10000, value=projet['budget_alloue_mensuel'])
-
-                with col2:
-                    montant_reel = st.number_input("Montant Réel (FCFA)", min_value=0, step=10000)
-
-                if st.form_submit_button("💾 Ajouter Suivi"):
-                    # Trouver le projet et ajouter le suivi
-                    for i, p in enumerate(st.session_state.projets):
-                        if p['id'] == projet['id']:
-                            if 'suivi_mensuel' not in st.session_state.projets[i]:
-                                st.session_state.projets[i]['suivi_mensuel'] = []
-
-                            mois_cible = f"{st.session_state.filter_year}-{st.session_state.filter_month:02d}"
-
-                            # Vérifier si le suivi existe déjà pour ce mois
-                            existing_suivi = [s for s in st.session_state.projets[i]['suivi_mensuel'] if s['mois'] == mois_cible]
-
-                            if existing_suivi:
-                                # Mettre à jour
-                                for s in st.session_state.projets[i]['suivi_mensuel']:
-                                    if s['mois'] == mois_cible:
-                                        s['prevu'] = montant_prevu
-                                        s['reel'] = montant_reel
-                            else:
-                                # Ajouter nouveau
-                                st.session_state.projets[i]['suivi_mensuel'].append({
-                                    'mois': mois_cible,
-                                    'prevu': montant_prevu,
-                                    'reel': montant_reel
-                                })
-
-                            # Mettre à jour le montant utilisé réel et date modification
-                            total_reel = sum(s['reel'] for s in st.session_state.projets[i]['suivi_mensuel'])
-                            st.session_state.projets[i]['montant_utilise_reel'] = total_reel
-                            st.session_state.projets[i]['date_modification'] = datetime.now()
-
-                            st.success(f"Suivi ajouté pour {datetime(st.session_state.filter_year, st.session_state.filter_month, 1).strftime('%B %Y')}!")
-                            st.rerun()
-        else:
-            st.info("Sélectionnez un mois et une année spécifiques pour ajouter un suivi.")
-
-        # Bouton fermer
-        if st.button("❌ Fermer Suivi", key=f"close_suivi_{projet['id']}"):
-            if 'show_suivi_id' in st.session_state:
-                del st.session_state.show_suivi_id
-            st.rerun()
-
-def show_project_advice(projet):
-    """Affiche les conseils des 3 mentors pour un projet avec configuration dynamique"""
-    with st.expander(f"🎯 Conseils des 3 Mentors: {projet['nom']}", expanded=True):
-
-        col1, col2, col3 = st.columns(3)
-
-        mentors_config = st.session_state.admin_config['mentors_conseils']
-
-        with col1:
-            st.markdown("#### 🏢 Robert Kiyosaki")
-            st.markdown("*Père Riche, Père Pauvre*")
-
-            conseil = mentors_config['Kiyosaki'].get(projet['type'], 'Conseil non configuré')
-            if projet['type'] == 'Actif générateur':
-                st.success(f"✅ {conseil}")
-            elif projet['type'] == 'Passif':
-                st.warning(f"⚠️ {conseil}")
-            else:
-                st.info(f"📚 {conseil}")
-
-        with col2:
-            st.markdown("#### 💎 Warren Buffett")
-            st.markdown("*L'Oracle d'Omaha*")
-
-            conseil = mentors_config['Buffett'].get(projet['type'], 'Conseil non configuré')
-            if projet['type'] == 'Actif générateur':
-                st.success(f"🔍 {conseil}")
-            elif projet['type'] == 'Passif':
-                st.warning(f"🤔 {conseil}")
-            else:
-                st.info(f"🎯 {conseil}")
-
-        with col3:
-            st.markdown("#### 💪 Dave Ramsey")
-            st.markdown("*Total Money Makeover*")
-
-            conseil = mentors_config['Ramsey'].get(projet['type'], 'Conseil non configuré')
-            if projet['type'] == 'Actif générateur':
-                st.success(f"💰 {conseil}")
-            elif projet['type'] == 'Passif':
-                st.warning(f"🚨 {conseil}")
-            else:
-                st.info(f"✅ {conseil}")
-
-        # Bouton fermer
-        if st.button("❌ Fermer Conseils", key=f"close_advice_{projet['id']}"):
-            if 'show_advice_id' in st.session_state:
-                del st.session_state.show_advice_id
-            st.rerun()
-
-def show_add_project_form():
-    """Formulaire d'ajout de projet avec dates et responsable"""
-    with st.expander("➕ Nouveau Projet", expanded=True):
-        with st.form("add_project_form"):
-            col1, col2 = st.columns(2)
-
-            with col1:
-                nom = st.text_input("Nom du projet*", placeholder="ex: Groupe électrogène meublés")
-                type_projet = st.selectbox(
-                    "Type selon Kiyosaki*",
-                    st.session_state.admin_config['listes_config']['types_projet'],
-                    help="Actif = génère revenus, Passif = coûte de l'argent, Formation = capital humain"
-                )
-                montant_total = st.number_input("Budget total nécessaire (FCFA)*", min_value=0, step=10000)
-                roi_attendu = st.number_input("ROI attendu (%)", min_value=0.0, max_value=100.0, step=0.1)
-                priorite = st.selectbox("Priorité", st.session_state.admin_config['listes_config']['priorites'])
-                responsable = st.selectbox("Responsable*", st.session_state.admin_config['listes_config']['responsables'])
-
-            with col2:
-                statut = st.selectbox(
-                    "Statut", 
-                    st.session_state.admin_config['listes_config']['statuts_projet']
-                )
-                echeance = st.date_input("Échéance prévue", min_value=date.today())
-                budget_mensuel = st.number_input("Budget alloué/mois (FCFA)", min_value=0, step=10000)
-                cash_flow_mensuel = st.number_input(
-                    "Cash flow mensuel estimé (FCFA)", 
-                    help="Positif pour revenus, négatif pour dépenses",
-                    step=10000
-                )
-                source_financement = st.selectbox(
-                    "Source de financement",
-                    get_sources_financement()
-                )
-
-            description = st.text_area("Description détaillée", height=100)
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                submitted = st.form_submit_button("✅ Créer Projet", type="primary")
-
-            with col2:
-                if st.form_submit_button("❌ Annuler"):
-                    st.session_state.show_add_form = False
-                    st.rerun()
-
-            if submitted:
-                if nom and type_projet and montant_total > 0 and responsable:
-                    # Créer nouveau projet
-                    new_id = max([p['id'] for p in st.session_state.projets]) + 1 if st.session_state.projets else 1
-
-                    nouveau_projet = {
-                        'id': new_id,
-                        'nom': nom,
-                        'type': type_projet,
-                        'montant_total': montant_total,
-                        'budget_alloue_mensuel': budget_mensuel,
-                        'montant_utilise_reel': 0,
-                        'cash_flow_mensuel': cash_flow_mensuel,
-                        'statut': statut,
-                        'echeance': echeance,
-                        'roi_attendu': roi_attendu,
-                        'priorite': priorite,
-                        'description': description,
-                        'source_financement': source_financement,
-                        'responsable': responsable,
-                        'date_creation': datetime.now(),
-                        'date_modification': datetime.now(),
-                        'suivi_mensuel': []
-                    }
-
-                    st.session_state.projets.append(nouveau_projet)
-                    st.session_state.show_add_form = False
-                    st.success(f"✅ Projet '{nom}' créé avec succès !")
-                    st.rerun()
-                else:
-                    st.error("⚠️ Veuillez remplir tous les champs obligatoires.")
+            if st.button("📊 Suivi mensuel", key=f"track_project_{projet.get('id')}"):
+                show_monthly_tracking(projet)
+        
+        st.markdown("---")
 
 def show_edit_project_form():
-    """Formulaire de modification de projet avec dates"""
-    project_id = st.session_state.edit_project_id
-    projet = next((p for p in st.session_state.projets if p['id'] == project_id), None)
-
+    """Formulaire d'édition de projet"""
+    projet = next((p for p in st.session_state.projets if p.get('id') == st.session_state.edit_project_id), None)
+    
     if not projet:
         st.error("Projet introuvable")
         st.session_state.edit_project_id = None
         return
-
-    with st.expander(f"✏️ Modifier: {projet['nom']}", expanded=True):
-        with st.form("edit_project_form"):
-            col1, col2 = st.columns(2)
-
-            with col1:
-                nom = st.text_input("Nom du projet*", value=projet['nom'])
-                type_projet = st.selectbox(
-                    "Type selon Kiyosaki*",
-                    st.session_state.admin_config['listes_config']['types_projet'],
-                    index=st.session_state.admin_config['listes_config']['types_projet'].index(projet['type'])
-                )
-                montant_total = st.number_input("Budget total nécessaire (FCFA)*", value=projet['montant_total'], step=10000)
-                roi_attendu = st.number_input("ROI attendu (%)", value=projet['roi_attendu'], step=0.1)
-                priorite = st.selectbox(
-                    "Priorité", 
-                    st.session_state.admin_config['listes_config']['priorites'],
-                    index=st.session_state.admin_config['listes_config']['priorites'].index(safe_get(projet, 'priorite', 'Moyenne'))
-                )
-                responsable = st.selectbox(
-                    "Responsable*", 
-                    st.session_state.admin_config['listes_config']['responsables'],
-                    index=st.session_state.admin_config['listes_config']['responsables'].index(safe_get(projet, 'responsable', 'Alix'))
-                )
-
-            with col2:
-                statut = st.selectbox(
-                    "Statut",
-                    st.session_state.admin_config['listes_config']['statuts_projet'],
-                    index=st.session_state.admin_config['listes_config']['statuts_projet'].index(projet['statut'])
-                )
-                echeance = st.date_input("Échéance prévue", value=projet['echeance'])
-                budget_mensuel = st.number_input("Budget alloué/mois (FCFA)", value=projet['budget_alloue_mensuel'], step=10000)
-                cash_flow_mensuel = st.number_input("Cash flow mensuel estimé (FCFA)", value=projet['cash_flow_mensuel'], step=10000)
-
-                sources_list = get_sources_financement()
-                current_source = safe_get(projet, 'source_financement', sources_list[0])
-                source_index = sources_list.index(current_source) if current_source in sources_list else 0
-
-                source_financement = st.selectbox(
-                    "Source de financement",
-                    sources_list,
-                    index=source_index
-                )
-
-            description = st.text_area("Description détaillée", value=projet['description'])
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                if st.form_submit_button("💾 Sauvegarder", type="primary"):
-                    # Mettre à jour le projet
-                    index = next(i for i, p in enumerate(st.session_state.projets) if p['id'] == project_id)
-
-                    st.session_state.projets[index].update({
+    
+    st.subheader(f"✏️ Modifier: {projet.get('nom', 'Projet')}")
+    
+    with st.form("edit_project_form"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            nom = st.text_input("*Nom du projet", value=projet.get('nom', ''))
+            type_projet = st.selectbox("*Type", st.session_state.config_admin['listes']['types_projets'],
+                                     index=st.session_state.config_admin['listes']['types_projets'].index(projet.get('type', 'Actif générateur')))
+            montant_total = st.number_input("*Budget total (FCFA)", min_value=0, value=int(projet.get('montant_total', 0)), step=1000)
+            cash_flow = st.number_input("Cash flow mensuel (FCFA)", value=int(projet.get('cash_flow_mensuel', 0)), step=1000)
+            roi_attendu = st.number_input("ROI attendu (%)", min_value=0.0, max_value=100.0, 
+                                        value=float(projet.get('roi_attendu', 0.0)), step=0.1)
+        
+        with col2:
+            statut = st.selectbox("*Statut", st.session_state.config_admin['listes']['statuts'],
+                                index=st.session_state.config_admin['listes']['statuts'].index(projet.get('statut', 'À venir')))
+            priorite = st.selectbox("*Priorité", st.session_state.config_admin['listes']['priorites'],
+                                  index=st.session_state.config_admin['listes']['priorites'].index(projet.get('priorite', 'Moyenne')))
+            categorie = st.selectbox("*Catégorie", st.session_state.config_admin['listes']['categories'],
+                                   index=st.session_state.config_admin['listes']['categories'].index(projet.get('categorie', 'Business')))
+            
+            echeance_actuelle = projet.get('echeance', date.today())
+            if isinstance(echeance_actuelle, str):
+                try:
+                    echeance_actuelle = datetime.strptime(echeance_actuelle, '%Y-%m-%d').date()
+                except:
+                    echeance_actuelle = date.today()
+            
+            echeance = st.date_input("*Échéance", value=echeance_actuelle)
+            
+            sources_disponibles = ["Non défini"] + [r['nom'] for r in st.session_state.revenus]
+            source_actuelle = safe_get(projet, 'source_financement', 'Non défini')
+            source_index = sources_disponibles.index(source_actuelle) if source_actuelle in sources_disponibles else 0
+            source_financement = st.selectbox("Source de financement", sources_disponibles, index=source_index)
+            
+            responsables = st.session_state.config_admin['listes']['responsables']
+            responsable_actuel = safe_get(projet, 'responsable', 'Famille')
+            responsable_index = responsables.index(responsable_actuel) if responsable_actuel in responsables else 0
+            responsable = st.selectbox("*Responsable", responsables, index=responsable_index)
+        
+        description = st.text_area("Description", value=projet.get('description', ''))
+        montant_utilise = st.number_input("Montant utilisé réel (FCFA)", min_value=0, 
+                                        value=int(projet.get('montant_utilise_reel', 0)), step=1000)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            submitted = st.form_submit_button("✅ Sauvegarder", type="primary")
+        with col2:
+            cancel = st.form_submit_button("❌ Annuler")
+        
+        if submitted:
+            # Validation
+            champs_obligatoires = {
+                'nom': nom,
+                'montant_total': montant_total
+            }
+            
+            champs_manquants = [k for k, v in champs_obligatoires.items() if not v or (k == 'montant_total' and v <= 0)]
+            
+            if champs_manquants:
+                champs_manquants_str = ", ".join([
+                    "Nom" if k == "nom" else "Budget total" if k == "montant_total" else k
+                    for k in champs_manquants
+                ])
+                st.error(f"⚠️ Champs manquants ou invalides: {champs_manquants_str}")
+                return
+            
+            # Mise à jour
+            for p in st.session_state.projets:
+                if p.get('id') == st.session_state.edit_project_id:
+                    p.update({
                         'nom': nom,
                         'type': type_projet,
-                        'montant_total': montant_total,
-                        'budget_alloue_mensuel': budget_mensuel,
-                        'cash_flow_mensuel': cash_flow_mensuel,
+                        'montant_total': int(montant_total),
+                        'montant_utilise_reel': int(montant_utilise),
+                        'cash_flow_mensuel': int(cash_flow),
+                        'roi_attendu': float(roi_attendu),
                         'statut': statut,
-                        'echeance': echeance,
-                        'roi_attendu': roi_attendu,
                         'priorite': priorite,
+                        'echeance': echeance,
+                        'categorie': categorie,
                         'description': description,
                         'source_financement': source_financement,
                         'responsable': responsable,
                         'date_modification': datetime.now()
                     })
-
-                    st.session_state.edit_project_id = None
-                    st.success("Projet modifié!")
-                    st.rerun()
-
-            with col2:
-                if st.form_submit_button("❌ Annuler"):
-                    st.session_state.edit_project_id = None
-                    st.rerun()
-
-def filter_projects(projets, filter_type, filter_status, filter_priority, sort_by):
-    """Filtre et trie les projets"""
-
-    # Filtrage
-    if filter_type != "Tous":
-        projets = [p for p in projets if p['type'] == filter_type]
-
-    if filter_status != "Tous":
-        projets = [p for p in projets if p['statut'] == filter_status]
-
-    if filter_priority != "Toutes":
-        projets = [p for p in projets if safe_get(p, 'priorite', 'Moyenne') == filter_priority]
-
-    # Tri
-    if sort_by == "Nom":
-        projets.sort(key=lambda x: x['nom'])
-    elif sort_by == "Montant":
-        projets.sort(key=lambda x: x['montant_total'], reverse=True)
-    elif sort_by == "Échéance":
-        projets.sort(key=lambda x: x['echeance'])
-    elif sort_by == "ROI":
-        projets.sort(key=lambda x: x['roi_attendu'], reverse=True)
-    elif sort_by == "Type":
-        projets.sort(key=lambda x: x['type'])
-    elif sort_by == "Date création":
-        projets.sort(key=lambda x: safe_get(x, 'date_creation', datetime.now()), reverse=True)
-
-    return projets
+                    break
+            
+            st.session_state.edit_project_id = None
+            st.success("✅ Projet mis à jour avec succès!")
+            st.rerun()
+        
+        if cancel:
+            st.session_state.edit_project_id = None
+            st.rerun()
 
 def show_revenue_management():
-    """Page Gestion des Revenus Variables avec filtrage et dates"""
-    st.title("💰 Gestion des Revenus Variables")
-
-    # Affichage période
-    if st.session_state.filter_month == "Tout" and st.session_state.filter_year == "Tout":
-        st.markdown("**📅 Période:** Toutes les données")
-    else:
-        periode_str = ""
-        if st.session_state.filter_month != "Tout":
-            periode_str += datetime(2025, st.session_state.filter_month, 1).strftime('%B')
-        if st.session_state.filter_year != "Tout":
-            if periode_str:
-                periode_str += f" {st.session_state.filter_year}"
-            else:
-                periode_str = f"Année {st.session_state.filter_year}"
-        st.markdown(f"**📅 Période:** {periode_str}")
-
-    st.markdown("""
-    Cette section permet de gérer les revenus qui fluctuent chaque mois 
-    (salaires supplémentaires, revenus business IIBA, loyers, etc.)
-    """)
-
-    # Actions principales
-    col1, col2 = st.columns([3, 1])
-    with col2:
-        if st.button("➕ Ajouter Revenu", type="primary"):
+    """Gestion des revenus variables"""
+    st.markdown('<div class="main-header"><h1>💰 Gestion des Revenus Variables</h1></div>', unsafe_allow_html=True)
+    
+    # Si en mode édition
+    if st.session_state.edit_revenue_id:
+        show_edit_revenue_form()
+        return
+    
+    # Boutons et filtres
+    col1, col2, col3 = st.columns([2, 1, 1])
+    
+    with col1:
+        if st.button("➕ Ajouter un nouveau revenu", type="primary"):
             st.session_state.show_add_revenue_form = True
-
+    
+    with col2:
+        type_filter = st.selectbox("Type", ["Tous"] + st.session_state.config_admin['listes']['types_revenus'])
+    
+    with col3:
+        mois_filter = st.selectbox("Mois", ["Tous"] + ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", 
+                                                      "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"])
+    
     # Formulaire d'ajout
     if st.session_state.get('show_add_revenue_form', False):
         show_add_revenue_form()
-
-    # Formulaire de modification
-    if st.session_state.get('edit_revenue_id'):
-        show_edit_revenue_form()
-
-    # Affichage revenus actuels avec filtrage
-    st.subheader("💼 Revenus Mensuels Actuels")
-
-    revenus_filtered = filter_data_by_period(st.session_state.revenus_variables, 'date_creation')
-
-    if revenus_filtered:
-        for revenu in revenus_filtered:
-            show_revenue_card(revenu)
-
-        # Total
-        total_revenus = sum(r['montant_mensuel'] for r in revenus_filtered)
-        st.markdown(f"### **Total Revenus: {format_currency(total_revenus)}**")
-
-    else:
-        st.info("Aucun revenu variable pour la période sélectionnée.")
-
-    # Graphique évolution filtré par période
-    st.subheader("📈 Évolution des Revenus")
-
-    if revenus_filtered:
-        # Simulation données historiques pour la période sélectionnée
-        import numpy as np
-
-        # Générer données
-        if st.session_state.filter_year != "Tout":
-            end_date = date(st.session_state.filter_year, 12, 1)
-        else:
-            end_date = date.today().replace(day=1)
-
-        mois = pd.date_range(end=end_date, periods=12, freq='MS')
-
-        revenus_data = []
-        for revenu in revenus_filtered:
-            if revenu['regulier']:
-                revenus_data.append([revenu['montant_mensuel']] * len(mois))
-            else:
-                # Simulation variation pour revenus variables
-                base = revenu['montant_mensuel'] 
-                variation = np.random.normal(base, base*0.2, len(mois))
-                variation = np.maximum(variation, 0)  # Pas de revenus négatifs
-                revenus_data.append(variation)
-
-        if revenus_data:
-            df_revenus = pd.DataFrame({
-                revenu['nom']: evolution 
-                for revenu, evolution in zip(revenus_filtered, revenus_data)
-            }, index=mois)
-
-            fig = px.line(df_revenus, title="Évolution des Revenus par Source")
-            fig.update_layout(height=400)
-            st.plotly_chart(fig, use_container_width=True)
-
-def show_revenue_card(revenu):
-    """Affiche une carte de revenu avec possibilité de modification et informations de gestion"""
-    with st.container():
-        col1, col2, col3, col4, col5 = st.columns([2, 1, 1, 1, 1])
-
-        with col1:
-            st.write(f"**{revenu['nom']}**")
-            st.caption(f"👤 {safe_get(revenu, 'responsable', 'Non défini')}")
-
-        with col2:
-            st.write(revenu['type'])
-
-        with col3:
-            st.write(format_currency(revenu['montant_mensuel']))
-
-        with col4:
-            st.write("🔄 Régulier" if revenu['regulier'] else "📊 Variable")
-
-        with col5:
-            col_edit, col_delete = st.columns(2)
-
-            # Utilisation sécurisée de l'ID
-            revenu_id = safe_get(revenu, 'id', f"rev_{revenu['nom'].replace(' ', '_')}")
-
-            with col_edit:
-                if st.button("✏️", key=f"edit_rev_{revenu_id}"):
-                    st.session_state.edit_revenue_id = revenu_id
-                    st.rerun()
-
-            with col_delete:
-                if st.button("🗑️", key=f"del_rev_{revenu_id}"):
-                    if st.session_state.get(f"confirm_delete_rev_{revenu_id}", False):
-                        # Suppression confirmée
-                        st.session_state.revenus_variables = [r for r in st.session_state.revenus_variables if safe_get(r, 'id', f"rev_{r['nom'].replace(' ', '_')}") != revenu_id]
-                        st.success(f"Revenu '{revenu['nom']}' supprimé.")
-                        if f"confirm_delete_rev_{revenu_id}" in st.session_state:
-                            del st.session_state[f"confirm_delete_rev_{revenu_id}"]
-                        st.rerun()
-                    else:
-                        # Demande de confirmation
-                        st.session_state[f"confirm_delete_rev_{revenu_id}"] = True
-                        st.warning("Cliquez à nouveau pour confirmer.")
-
-        # Affichage dates de gestion
-        col1, col2 = st.columns(2)
-        with col1:
-            date_creation = safe_get(revenu, 'date_creation', datetime.now())
-            if isinstance(date_creation, str):
-                date_creation = datetime.strptime(date_creation, '%Y-%m-%d %H:%M:%S')
-            st.caption(f"📅 Créé: {date_creation.strftime('%d/%m/%Y %H:%M')}")
-
-        with col2:
-            date_modification = safe_get(revenu, 'date_modification', datetime.now())
-            if isinstance(date_modification, str):
-                date_modification = datetime.strptime(date_modification, '%Y-%m-%d %H:%M:%S')
-            st.caption(f"🔄 Modifié: {date_modification.strftime('%d/%m/%Y %H:%M')}")
-
+    
     st.markdown("---")
+    
+    # Affichage des revenus avec filtres
+    revenus_filtres = st.session_state.revenus
+    if type_filter != "Tous":
+        revenus_filtres = [r for r in revenus_filtres if r.get('type') == type_filter]
+    if mois_filter != "Tous":
+        revenus_filtres = [r for r in revenus_filtres if r.get('mois') == mois_filter]
+    
+    if not revenus_filtres:
+        st.info("Aucun revenu trouvé avec les filtres sélectionnés.")
+        return
+    
+    # Calcul du total
+    total_revenus = sum(r.get('montant', 0) for r in revenus_filtres)
+    st.metric("💰 Total des revenus affichés", f"{total_revenus:,.0f} FCFA")
+    
+    st.markdown("---")
+    
+    for revenu in revenus_filtres:
+        show_revenue_card(revenu)
 
 def show_add_revenue_form():
-    """Formulaire d'ajout de revenu avec responsable et dates"""
-    with st.expander("➕ Ajouter un Revenu Variable", expanded=True):
-        with st.form("add_revenue_form"):
-            col1, col2 = st.columns(2)
+    """Formulaire d'ajout de revenu"""
+    st.subheader("➕ Nouveau Revenu")
+    
+    with st.form("add_revenue_form", clear_on_submit=False):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            nom = st.text_input("*Nom du revenu", help="Ex: Bonus William février")
+            type_revenu = st.selectbox("*Type", st.session_state.config_admin['listes']['types_revenus'])
+            montant = st.number_input("*Montant (FCFA)", min_value=0, value=0, step=1000)
+        
+        with col2:
+            mois = st.selectbox("*Mois", ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", 
+                                        "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"])
+            annee = st.number_input("*Année", min_value=2020, max_value=2030, value=2025, step=1)
+            responsable = st.selectbox("*Responsable", st.session_state.config_admin['listes']['responsables'])
+        
+        recurrent = st.checkbox("Revenu récurrent", help="Ce revenu se répète-t-il chaque mois ?")
+        description = st.text_area("Description", help="Description optionnelle du revenu")
+        
+        submitted = st.form_submit_button("✅ Ajouter le revenu", type="primary")
+        cancel = st.form_submit_button("❌ Annuler")
+        
+        if submitted:
+            # Validation améliorée
+            champs_obligatoires = {
+                'nom': nom,
+                'type_revenu': type_revenu,
+                'montant': montant,
+                'responsable': responsable
+            }
+            
+            champs_manquants = [k for k, v in champs_obligatoires.items() if not v or (k == 'montant' and v <= 0)]
+            
+            if champs_manquants:
+                champs_manquants_str = ", ".join([
+                    "Nom" if k == "nom" else
+                    "Type" if k == "type_revenu" else
+                    "Montant" if k == "montant" else
+                    "Responsable" if k == "responsable" else k
+                    for k in champs_manquants
+                ])
+                st.error(f"⚠️ Champs manquants: {champs_manquants_str}")
+                return
+            
+            nouveau_revenu = {
+                'id': str(uuid.uuid4()),
+                'nom': nom,
+                'type': type_revenu,
+                'montant': int(montant),
+                'mois': mois,
+                'annee': int(annee),
+                'recurrent': recurrent,
+                'description': description,
+                'responsable': responsable,
+                'date_creation': datetime.now(),
+                'date_modification': datetime.now()
+            }
+            
+            st.session_state.revenus.append(nouveau_revenu)
+            st.session_state.show_add_revenue_form = False
+            st.success(f"✅ Revenu '{nom}' ajouté avec succès!")
+            st.rerun()
+        
+        if cancel:
+            st.session_state.show_add_revenue_form = False
+            st.rerun()
 
-            with col1:
-                nom_revenu = st.text_input("Nom du revenu*", placeholder="ex: Bonus William")
-                type_revenu = st.selectbox("Type", st.session_state.admin_config['listes_config']['types_revenu'])
-                responsable = st.selectbox("Responsable*", st.session_state.admin_config['listes_config']['responsables'])
-
-            with col2:
-                montant_mensuel = st.number_input("Montant ce mois (FCFA)*", min_value=0, step=10000)
-                regulier = st.checkbox("Revenu régulier ?", help="Cocher si le montant est prévisible chaque mois")
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                if st.form_submit_button("✅ Ajouter Revenu", type="primary"):
-                    if nom_revenu and montant_mensuel > 0 and responsable:
-                        # Créer ID unique
-                        existing_ids = [safe_get(r, 'id', 0) for r in st.session_state.revenus_variables]
-                        numeric_ids = [id for id in existing_ids if isinstance(id, int)]
-                        new_id = max(numeric_ids) + 1 if numeric_ids else 1
-
-                        nouveau_revenu = {
-                            'id': new_id,
-                            'nom': nom_revenu,
-                            'montant_mensuel': montant_mensuel,
-                            'type': type_revenu,
-                            'regulier': regulier,
-                            'responsable': responsable,
-                            'date_creation': datetime.now(),
-                            'date_modification': datetime.now()
-                        }
-                        st.session_state.revenus_variables.append(nouveau_revenu)
-                        st.session_state.show_add_revenue_form = False
-                        st.success(f"Revenu '{nom_revenu}' ajouté !")
-                        st.rerun()
-                    else:
-                        st.error("Veuillez remplir tous les champs obligatoires.")
-
-            with col2:
-                if st.form_submit_button("❌ Annuler"):
-                    st.session_state.show_add_revenue_form = False
+def show_revenue_card(revenu):
+    """Affiche une carte revenu"""
+    type_icons = {
+        'Salaire': '💼',
+        'Business': '📈',
+        'Loyer': '🏠',
+        'Investissement': '📊',
+        'Bonus': '🎁'
+    }
+    
+    icon = type_icons.get(revenu.get('type', ''), '💰')
+    
+    with st.container():
+        st.markdown(f"""
+        <div class="project-card" style="border-left-color: #28a745;">
+            <h4>{icon} {revenu.get('nom', 'Revenu')}</h4>
+            <div style="color: #28a745; font-weight: bold;">Type: {revenu.get('type', 'Non défini')}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.write(f"**💰 Montant:** {revenu.get('montant', 0):,.0f} FCFA")
+            st.write(f"**📅 Période:** {revenu.get('mois', 'Non défini')} {revenu.get('annee', 'Non définie')}")
+        
+        with col2:
+            st.write(f"**🔄 Récurrent:** {'Oui' if revenu.get('recurrent', False) else 'Non'}")
+            st.write(f"**👤 Responsable:** {safe_get(revenu, 'responsable', 'Non défini')}")
+        
+        with col3:
+            if safe_get(revenu, 'date_creation'):
+                st.write(f"**📅 Créé:** {revenu['date_creation'].strftime('%d/%m/%Y')}")
+            if safe_get(revenu, 'date_modification') and revenu['date_modification'] != revenu.get('date_creation'):
+                st.write(f"**📝 Modifié:** {revenu['date_modification'].strftime('%d/%m/%Y')}")
+        
+        if revenu.get('description'):
+            st.write(f"**📝 Description:** {revenu.get('description')}")
+        
+        # Boutons d'action
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("✏️", key=f"edit_rev_{revenu.get('id', 'temp')}", help="Modifier"):
+                st.session_state.edit_revenue_id = revenu.get('id')
+                st.rerun()
+        with col2:
+            if st.button("🗑️", key=f"delete_rev_{revenu.get('id', 'temp')}", help="Supprimer"):
+                if st.session_state.get(f"confirm_delete_rev_{revenu.get('id')}", False):
+                    st.session_state.revenus = [r for r in st.session_state.revenus if r.get('id') != revenu.get('id')]
+                    if f"confirm_delete_rev_{revenu.get('id')}" in st.session_state:
+                        del st.session_state[f"confirm_delete_rev_{revenu.get('id')}"]
+                    st.success(f"Revenu '{revenu.get('nom')}' supprimé!")
                     st.rerun()
+                else:
+                    st.session_state[f"confirm_delete_rev_{revenu.get('id')}"] = True
+                    st.warning("⚠️ Cliquez à nouveau pour confirmer")
+        
+        st.markdown("---")
 
 def show_edit_revenue_form():
-    """Formulaire de modification de revenu avec dates"""
-    revenue_id = st.session_state.edit_revenue_id
-
-    # Trouver le revenu avec gestion sécurisée des IDs
-    revenu = None
-    for r in st.session_state.revenus_variables:
-        r_id = safe_get(r, 'id', f"rev_{r['nom'].replace(' ', '_')}")
-        if r_id == revenue_id:
-            revenu = r
-            break
-
+    """Formulaire d'édition de revenu"""
+    revenu = next((r for r in st.session_state.revenus if r.get('id') == st.session_state.edit_revenue_id), None)
+    
     if not revenu:
         st.error("Revenu introuvable")
         st.session_state.edit_revenue_id = None
         return
-
-    with st.expander(f"✏️ Modifier: {revenu['nom']}", expanded=True):
-        with st.form("edit_revenue_form"):
-            col1, col2 = st.columns(2)
-
-            with col1:
-                nom_revenu = st.text_input("Nom du revenu*", value=revenu['nom'])
-                type_revenu = st.selectbox(
-                    "Type", 
-                    st.session_state.admin_config['listes_config']['types_revenu'],
-                    index=st.session_state.admin_config['listes_config']['types_revenu'].index(revenu['type'])
-                )
-                responsable = st.selectbox(
-                    "Responsable*", 
-                    st.session_state.admin_config['listes_config']['responsables'],
-                    index=st.session_state.admin_config['listes_config']['responsables'].index(safe_get(revenu, 'responsable', 'Alix'))
-                )
-
-            with col2:
-                montant_mensuel = st.number_input("Montant ce mois (FCFA)*", value=revenu['montant_mensuel'], step=10000)
-                regulier = st.checkbox("Revenu régulier ?", value=revenu['regulier'])
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                if st.form_submit_button("💾 Sauvegarder", type="primary"):
-                    # Mettre à jour le revenu
-                    for i, r in enumerate(st.session_state.revenus_variables):
-                        r_id = safe_get(r, 'id', f"rev_{r['nom'].replace(' ', '_')}")
-                        if r_id == revenue_id:
-                            st.session_state.revenus_variables[i].update({
-                                'nom': nom_revenu,
-                                'montant_mensuel': montant_mensuel,
-                                'type': type_revenu,
-                                'regulier': regulier,
-                                'responsable': responsable,
-                                'date_modification': datetime.now()
-                            })
-                            break
-
-                    st.session_state.edit_revenue_id = None
-                    st.success("Revenu modifié!")
-                    st.rerun()
-
-            with col2:
-                if st.form_submit_button("❌ Annuler"):
-                    st.session_state.edit_revenue_id = None
-                    st.rerun()
-
-# ============================================================================
-# PAGES COMPLÈTES AVEC FILTRAGE
-# ============================================================================
-
-def show_mentor_advice():
-    """Page Conseils des 3 Mentors avec filtrage des projets"""
-    st.title("🎯 Conseil des 3 Mentors Financiers")
-
-    # Affichage période
-    if st.session_state.filter_month == "Tout" and st.session_state.filter_year == "Tout":
-        st.markdown("**📅 Période:** Toutes les données")
-    else:
-        periode_str = ""
-        if st.session_state.filter_month != "Tout":
-            periode_str += datetime(2025, st.session_state.filter_month, 1).strftime('%B')
-        if st.session_state.filter_year != "Tout":
-            if periode_str:
-                periode_str += f" {st.session_state.filter_year}"
-            else:
-                periode_str = f"Année {st.session_state.filter_year}"
-        st.markdown(f"**📅 Période:** {periode_str}")
-
-    # Sélection d'un projet avec filtrage
-    projets_filtered = filter_data_by_period(st.session_state.projets, 'date_creation')
-    project_names = [p['nom'] for p in projets_filtered]
-
-    if project_names:
-        selected_project_name = st.selectbox("Choisir un projet pour conseil détaillé", project_names)
-
-        if selected_project_name:
-            project = next(p for p in projets_filtered if p['nom'] == selected_project_name)
-            show_project_advice(project)
-    else:
-        st.info("Aucun projet disponible pour la période sélectionnée. Ajoutez des projets ou modifiez le filtre.")
-
-def show_analytics():
-    """Page Analytics & KPIs Avancés avec filtrage complet"""
-    st.title("📈 Analytics & KPIs Avancés")
-
-    # Affichage période
-    if st.session_state.filter_month == "Tout" and st.session_state.filter_year == "Tout":
-        st.markdown("**📅 Période:** Toutes les données")
-    else:
-        periode_str = ""
-        if st.session_state.filter_month != "Tout":
-            periode_str += datetime(2025, st.session_state.filter_month, 1).strftime('%B')
-        if st.session_state.filter_year != "Tout":
-            if periode_str:
-                periode_str += f" {st.session_state.filter_year}"
-            else:
-                periode_str = f"Année {st.session_state.filter_year}"
-        st.markdown(f"**📅 Période:** {periode_str}")
-
-    # Données filtrées
-    projets_filtered = filter_data_by_period(st.session_state.projets, 'date_creation')
-    kpis = calculer_kpis()  # Déjà filtré dans la fonction
-
-    # KPIs détaillés pour la période sélectionnée
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        total_investissement = sum(p['montant_total'] for p in projets_filtered)
-        st.metric("💰 Total Investissement", format_currency(total_investissement))
-
-    with col2:
-        total_utilise = sum(p['montant_utilise_reel'] for p in projets_filtered)
-        st.metric("💸 Utilisé Réel", format_currency(total_utilise))
-
-    with col3:
-        utilisation_pct = (total_utilise / total_investissement * 100) if total_investissement > 0 else 0
-        st.metric("📊 Taux Utilisation", f"{utilisation_pct:.1f}%")
-
-    # Graphique détaillé par projet pour la période
-    st.subheader("📊 Performance des Projets par Période")
-
-    if projets_filtered:
-        df_projets = pd.DataFrame([
-            {
-                'Nom': p['nom'],
-                'Type': p['type'],
-                'Responsable': safe_get(p, 'responsable', 'Non défini'),
-                'Budget Total': p['montant_total'],
-                'Utilisé': p['montant_utilise_reel'],
-                'Progression %': (p['montant_utilise_reel'] / p['montant_total'] * 100) if p['montant_total'] > 0 else 0,
-                'Cash Flow': p['cash_flow_mensuel'],
-                'ROI %': p['roi_attendu']
-            }
-            for p in projets_filtered
-        ])
-
-        fig = px.scatter(
-            df_projets, 
-            x='Budget Total', 
-            y='Cash Flow',
-            size='Progression %',
-            color='Type',
-            hover_name='Nom',
-            hover_data=['Responsable', 'ROI %'],
-            title="Analyse Investissements",
-            labels={'Budget Total': 'Budget Total (FCFA)', 'Cash Flow': 'Cash Flow Mensuel (FCFA)'}
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-        # Table détaillée
-        st.subheader("📋 Détail par Projet")
-        st.dataframe(df_projets, use_container_width=True, hide_index=True)
-
-        # Analyse par responsable
-        st.subheader("📊 Répartition par Responsable")
-
-        responsable_stats = {}
-        for projet in projets_filtered:
-            resp = safe_get(projet, 'responsable', 'Non défini')
-            if resp not in responsable_stats:
-                responsable_stats[resp] = {'projets': 0, 'budget_total': 0, 'cash_flow': 0}
-            responsable_stats[resp]['projets'] += 1
-            responsable_stats[resp]['budget_total'] += projet['montant_total']
-            responsable_stats[resp]['cash_flow'] += projet['cash_flow_mensuel']
-
-        if responsable_stats:
-            df_resp = pd.DataFrame(responsable_stats).T
-            df_resp.index.name = 'Responsable'
-            st.dataframe(df_resp, use_container_width=True)
-    else:
-        st.info("Aucune donnée pour la période sélectionnée.")
-
-def show_progression():
-    """Page Progression Familiale avec filtrage"""
-    st.title("🚀 Progression Familiale vers l'Indépendance")
-
-    # Affichage période
-    if st.session_state.filter_month == "Tout" and st.session_state.filter_year == "Tout":
-        st.markdown("**📅 Période:** Toutes les données")
-    else:
-        periode_str = ""
-        if st.session_state.filter_month != "Tout":
-            periode_str += datetime(2025, st.session_state.filter_month, 1).strftime('%B')
-        if st.session_state.filter_year != "Tout":
-            if periode_str:
-                periode_str += f" {st.session_state.filter_year}"
-            else:
-                periode_str = f"Année {st.session_state.filter_year}"
-        st.markdown(f"**📅 Période:** {periode_str}")
-
-    # Baby Steps Dave Ramsey avec progression par période
-    st.subheader("👶 Baby Steps Dave Ramsey - Progression")
-
-    baby_steps = [
-        ("Fonds d'urgence starter 665k FCFA", 1, "💰"),
-        ("Éliminer toutes dettes (sauf immobilier)", 2, "🚫"),  
-        ("Fonds d'urgence complet 3-6 mois", 3, "🏦"),
-        ("Investir 15% revenus pour retraite", 4, "📈"),
-        ("Épargne université enfants", 5, "🎓"),
-        ("Rembourser hypothèque anticipé", 6, "🏠"),
-        ("Construire richesse et donner", 7, "💎")
-    ]
-
-    kpis = calculer_kpis()
-    current_step = kpis['baby_step_actuel']
-
-    for step_desc, step_num, emoji in baby_steps:
-        if step_num < current_step:
-            st.success(f"✅ {emoji} **Étape {step_num}:** {step_desc}")
-        elif step_num == current_step:
-            st.warning(f"🔄 {emoji} **Étape {step_num} (ACTUELLE):** {step_desc}")
-        else:
-            st.info(f"⏳ {emoji} **Étape {step_num}:** {step_desc}")
-
-    # Graphique progression temporelle basé sur période filtrée
-    st.subheader("📈 Évolution par Période")
-
-    # Simulation progression sur 24 mois
-    if st.session_state.filter_year != "Tout" and st.session_state.filter_month != "Tout":
-        start_date = date(st.session_state.filter_year, st.session_state.filter_month, 1)
-    else:
-        start_date = date.today().replace(day=1)
-
-    mois_futurs = pd.date_range(start=start_date, periods=24, freq='MS')
-
-    progression_simulation = []
-    for i, mois in enumerate(mois_futurs):
-        progression_simulation.append({
-            'Mois': mois,
-            'Revenus Passifs %': min(kpis['revenus_passifs_pct'] + (i * 1.2), 50),  # Progression graduelle
-            'Cash Flow': kpis['cash_flow_mensuel'] + (i * 120000),  # Amélioration graduelle
-            'Baby Step': min(current_step + (i // 6), 7)  # Progression par étapes
-        })
-
-    df_progression = pd.DataFrame(progression_simulation)
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        fig = px.line(
-            df_progression, 
-            x='Mois', 
-            y='Revenus Passifs %',
-            title="Projection Revenus Passifs"
-        )
-        fig.add_hline(y=st.session_state.admin_config['kpis_config']['objectif_revenus_passifs'], 
-                      line_dash="dash", 
-                      annotation_text=f"Objectif {st.session_state.admin_config['kpis_config']['objectif_revenus_passifs']}%")
-        st.plotly_chart(fig, use_container_width=True)
-
-    with col2:
-        fig = px.line(
-            df_progression, 
-            x='Mois', 
-            y='Cash Flow',
-            title="Projection Cash Flow"
-        )
-        fig.add_hline(y=0, line_dash="dash", annotation_text="Équilibre")
-        fig.add_hline(y=st.session_state.admin_config['kpis_config']['objectif_cash_flow'], 
-                      line_dash="dot", 
-                      annotation_text="Objectif")
-        st.plotly_chart(fig, use_container_width=True)
-
-def show_children_education():
-    """Page Éducation Financière des Enfants avec adaptation à la période"""
-    st.title("👨‍👩‍👧‍👦 Éducation Financière des Enfants")
-
-    # Affichage période
-    if st.session_state.filter_month == "Tout" and st.session_state.filter_year == "Tout":
-        st.markdown("**📅 Période:** Toutes les données")
-    else:
-        periode_str = ""
-        if st.session_state.filter_month != "Tout":
-            periode_str += datetime(2025, st.session_state.filter_month, 1).strftime('%B')
-        if st.session_state.filter_year != "Tout":
-            if periode_str:
-                periode_str += f" {st.session_state.filter_year}"
-            else:
-                periode_str = f"Année {st.session_state.filter_year}"
-        st.markdown(f"**📅 Période:** {periode_str}")
-
-    # Adaptation des âges selon l'année filtrée
-    annee_base = 2025
-    if st.session_state.filter_year != "Tout":
-        diff_annee = st.session_state.filter_year - annee_base
-    else:
-        diff_annee = 0
-
-    enfants = [
-        {
-            'nom': 'Uriel',
-            'age': 14 + diff_annee,
-            'emoji': '👦',
-            'niveau': 'Adolescent - Concepts avancés',
-            'objectifs_mois': [
-                f'Analyser un projet familial',
-                'Créer son budget mensuel personnel',
-                'Comprendre les quadrants E-S-B-I'
-            ],
-            'activites': [
-                'Participation à la révision mensuelle des KPIs',
-                'Analyse d un investissement familial',
-                'Création d un mini-business plan'
-            ]
-        },
-        {
-            'nom': 'Naelle', 
-            'age': 7 + diff_annee,
-            'emoji': '👧',
-            'niveau': 'Enfant - Concepts fondamentaux',
-            'objectifs_mois': [
-                'Épargner 500 FCFA ce mois',
-                'Différencier 3 "actifs" et 3 "passifs"',
-                'Comprendre les "projets" des parents'
-            ],
-            'activites': [
-                'Jeu de tri "Actif ou Passif?"',
-                'Tirelire mensuelle avec objectif visuel',
-                'Histoire du "Petit Cochon Financier"'
-            ]
-        },
-        {
-            'nom': 'Nell-Henri',
-            'age': 5 + diff_annee,
-            'emoji': '👶',
-            'niveau': 'Petit enfant - Concepts simples',
-            'objectifs_mois': [
-                'Reconnaître pièces et billets FCFA',
-                'Comprendre "garder" vs "dépenser"',
-                'Aider à compter l argent'
-            ],
-            'activites': [
-                'Jeu "Marchande" avec vraie monnaie',
-                'Comptine "Les Sous qui Dorment"',
-                'Dessin "Ma Tirelire Magique"'
-            ]
-        }
-    ]
-
-    # Affichage des enfants avec planning personnalisé
-    for enfant in enfants:
-        with st.container():
-            st.markdown(f"## {enfant['emoji']} {enfant['nom']} ({enfant['age']} ans)")
-            st.markdown(f"**Niveau:** {enfant['niveau']}")
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.markdown(f"### 🎯 Objectifs")
-                for objectif in enfant['objectifs_mois']:
-                    st.write(f"• {objectif}")
-
-            with col2:
-                st.markdown(f"### 🎮 Activités")
-                for activite in enfant['activites']:
-                    st.write(f"• {activite}")
-
-            # Suivi progression selon période
-            if st.session_state.filter_month != "Tout":
-                progress_value = min((st.session_state.filter_month / 12) * 100, 100)
-                st.progress(progress_value / 100)
-                st.markdown(f"**Progression annuelle:** {progress_value:.0f}%")
-
-            st.markdown("---")
-
-    # Planning familial
-    st.subheader("👨‍👩‍👧‍👦 Planning Familial")
-
-    if st.session_state.filter_month != "Tout":
-        planning_mensuel = {
-            1: "Nouvelle année financière - Objectifs famille",
-            2: "Mois de l épargne - Challenge tirelires",
-            3: "Trimestre bilan - Réunion famille",
-            4: "Mois des projets - Planification ensemble",
-            5: "Préparation été - Budget vacances",
-            6: "Bilan mi-année - Célébration réussites",
-            7: "Vacances éducatives - Jeux financiers",
-            8: "Préparation rentrée - Budget scolaire",
-            9: "Rentrée - Nouveaux objectifs",
-            10: "Mois Halloween - Épargne bonbons",
-            11: "Préparation fêtes - Budget cadeaux",
-            12: "Bilan annuel - Récompenses famille"
-        }
-
-        activite_mois = planning_mensuel.get(st.session_state.filter_month, "Développement continu")
-        st.success(f"**🎯 Activité principale ce mois :** {activite_mois}")
-    else:
-        st.info("Sélectionnez un mois spécifique pour voir l'activité recommandée.")
-
-def show_vision_2030():
-    """Page Vision Familiale 2030 avec calculs basés sur période actuelle"""
-    st.title("🔮 Vision Familiale 2030")
-
-    # Affichage période
-    if st.session_state.filter_month == "Tout" and st.session_state.filter_year == "Tout":
-        current_date = date.today()
-        st.markdown(f"**📅 Période actuelle:** {current_date.strftime('%B %Y')}")
-    else:
-        if st.session_state.filter_year != "Tout" and st.session_state.filter_month != "Tout":
-            current_date = date(st.session_state.filter_year, st.session_state.filter_month, 1)
-            st.markdown(f"**📅 Période actuelle:** {current_date.strftime('%B %Y')}")
-        else:
-            current_date = date.today()
-            st.markdown("**📅 Période actuelle:** Date actuelle (filtre partiel)")
-
-    st.subheader("🇨🇭 Objectif: Toute la famille en Suisse avec indépendance financière")
-
-    # Progression vers 2030 basée sur la période actuelle
-    target_date = date(2030, 1, 1)
-    jours_restants = (target_date - current_date).days
-    mois_restants = jours_restants // 30
-
-    st.metric("⏰ Temps Restant", f"{mois_restants} mois", delta=f"{jours_restants} jours")
-
-    # Milestones avec dates précises
-    st.markdown("### 📅 Roadmap Stratégique vers 2030")
-
-    milestones = [
-        {'annee': 2025, 'titre': 'Stabilisation', 'description': 'Finaliser actifs Cameroun + cash flow positif', 'statut': 'en-cours'},
-        {'annee': 2026, 'titre': 'Transition', 'description': 'Développement revenus passifs 15%+', 'statut': 'planifie'},
-        {'annee': 2027, 'titre': 'Expansion', 'description': 'Multiplication actifs générateurs', 'statut': 'futur'},
-        {'annee': 2028, 'titre': 'Préparation', 'description': 'Déménagement famille - visa/scolarité', 'statut': 'futur'},
-        {'annee': 2029, 'titre': 'Installation', 'description': 'Installation progressive en Suisse', 'statut': 'futur'},
-        {'annee': 2030, 'titre': 'Indépendance', 'description': 'Indépendance financière complète', 'statut': 'objectif'}
-    ]
-
-    annee_reference = st.session_state.filter_year if st.session_state.filter_year != "Tout" else current_date.year
-
-    for milestone in milestones:
-        annee = milestone['annee']
-        progress = max(0, min(100, ((annee - 2025) / 5) * 100))
-
-        if annee <= annee_reference:
-            if milestone['statut'] == 'en-cours':
-                st.success(f"🔄 **{annee} - EN COURS:** {milestone['titre']} - {milestone['description']}")
-            else:
-                st.success(f"✅ **{annee} - RÉALISÉ:** {milestone['titre']} - {milestone['description']}")
-        elif annee == annee_reference + 1:
-            st.warning(f"🎯 **{annee} - PROCHAINE ÉTAPE:** {milestone['titre']} - {milestone['description']}")
-        else:
-            st.info(f"⏳ **{annee} - FUTUR:** {milestone['titre']} - {milestone['description']}")
-
-        st.progress(progress / 100)
-
-    # Calculs financiers actualisés
-    st.markdown("### 💰 Exigences Financières Actualisées")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.markdown("#### 📊 Situation Actuelle")
-        kpis = calculer_kpis()
-
-        st.metric("Cash Flow Mensuel", format_currency(kpis['cash_flow_mensuel']))
-        st.metric("Revenus Passifs", f"{kpis['revenus_passifs_pct']:.1f}%")
-        st.metric("Actifs Générateurs", f"{kpis['nombre_actifs']} projets")
-
-    with col2:
-        st.markdown("#### 🎯 Objectifs 2030")
-
-        # Calculs pour 2030
-        cout_enfants_2030_chf = 280000  # CHF
-        cout_famille_2030_chf = 150000  # CHF logement + vie
-        cout_total_chf = cout_enfants_2030_chf + cout_famille_2030_chf
-        cout_total_fcfa = cout_total_chf * 665  # Taux approximatif
-
-        st.metric("Coût Total Suisse", f"{cout_total_chf:,} CHF/an")
-        st.metric("Équivalent FCFA", f"{cout_total_fcfa:,.0f} FCFA/an")
-
-        revenus_passifs_requis = cout_total_fcfa * 1.3  # Marge sécurité
-        revenus_passifs_mensuels = revenus_passifs_requis / 12
-
-        st.metric("Revenus Passifs Requis", f"{revenus_passifs_mensuels:,.0f} FCFA/mois")
-
-    # Progression mensuelle vers objectif
-    st.markdown("### 📈 Progression Mensuelle vers Objectif")
-
-    # Calculer progression basée sur période actuelle
-    mois_ecoules = (annee_reference - 2025) * 12
-    if st.session_state.filter_month != "Tout":
-        mois_ecoules += st.session_state.filter_month
-    else:
-        mois_ecoules += current_date.month
-
-    progression_actuelle = min(mois_ecoules / 60 * 100, 100)  # 60 mois jusqu'à 2030
-
-    st.progress(progression_actuelle / 100)
-    st.markdown(f"**Progression générale:** {progression_actuelle:.1f}% vers objectif 2030")
-
-    # Actions prioritaires pour la période actuelle
-    st.markdown(f"### 🎯 Actions Prioritaires")
-
-    if annee_reference == 2025:
-        actions = [
-            "✅ Finaliser titre foncier Mejeuh",
-            "📈 Développer IIBA pour 500k FCFA/mois",
-            "💰 Atteindre cash flow mensuel positif",
-            "🏦 Constituer fonds d urgence 6 mois"
-        ]
-    elif annee_reference == 2026:
-        actions = [
-            "🏠 Acquérir 2ème propriété locative",
-            "💼 William: développer side-business",
-            "📊 Atteindre 20% revenus passifs",
-            "🎓 Formation investissement Alix"
-        ]
-    else:
-        actions = [
-            "🌍 Préparer dossiers immigration Suisse",
-            "🏫 Rechercher écoles enfants Suisse",
-            "💰 Optimiser transferts Cameroun-Suisse",
-            "🎯 Diversifier revenus passifs"
-        ]
-
-    for action in actions:
-        st.write(f"• {action}")
-
-# ============================================================================
-# NOUVELLE PAGE ADMINISTRATION
-# ============================================================================
-
-def show_admin():
-    """Page Administration complète"""
-    st.title("⚙️ Administration du Système")
-    st.markdown("Configuration avancée des paramètres, listes et conseils des mentors")
-
-    # Navigation admin
-    admin_tabs = st.tabs([
-        "🎯 KPIs & Objectifs", 
-        "📋 Listes & Vocabulaire", 
-        "🧠 Conseils Mentors",
-        "📊 Export/Import Données",
-        "📈 Statistiques Système"
-    ])
-
-    with admin_tabs[0]:
-        show_admin_kpis()
-
-    with admin_tabs[1]:
-        show_admin_listes()
-
-    with admin_tabs[2]:
-        show_admin_mentors()
-
-    with admin_tabs[3]:
-        show_admin_export_import()
-
-    with admin_tabs[4]:
-        show_admin_stats()
-
-def show_admin_kpis():
-    """Configuration des KPIs et objectifs"""
-    st.subheader("🎯 Configuration des KPIs et Objectifs")
-
-    with st.form("admin_kpis_form"):
-        st.markdown("### 💰 Objectifs Financiers")
-
+    
+    st.subheader(f"✏️ Modifier: {revenu.get('nom', 'Revenu')}")
+    
+    with st.form("edit_revenue_form"):
         col1, col2 = st.columns(2)
-
+        
         with col1:
-            objectif_cash_flow = st.number_input(
-                "Objectif Cash Flow Mensuel (FCFA)",
-                value=st.session_state.admin_config['kpis_config']['objectif_cash_flow'],
-                step=100000
-            )
-
-            objectif_ratio_actifs = st.number_input(
-                "Objectif Ratio Actifs/Total (%)",
-                value=st.session_state.admin_config['kpis_config']['objectif_ratio_actifs'],
-                min_value=0,
-                max_value=100
-            )
-
+            nom = st.text_input("*Nom du revenu", value=revenu.get('nom', ''))
+            type_revenu = st.selectbox("*Type", st.session_state.config_admin['listes']['types_revenus'],
+                                     index=st.session_state.config_admin['listes']['types_revenus'].index(revenu.get('type', 'Salaire')))
+            montant = st.number_input("*Montant (FCFA)", min_value=0, value=int(revenu.get('montant', 0)), step=1000)
+        
         with col2:
-            objectif_revenus_passifs = st.number_input(
-                "Objectif Revenus Passifs (%)",
-                value=st.session_state.admin_config['kpis_config']['objectif_revenus_passifs'],
-                min_value=0,
-                max_value=100
-            )
-
-            objectif_fonds_urgence = st.number_input(
-                "Objectif Fonds d'Urgence (mois)",
-                value=st.session_state.admin_config['kpis_config']['objectif_fonds_urgence'],
-                min_value=0,
-                max_value=12
-            )
-
-        if st.form_submit_button("💾 Sauvegarder KPIs", type="primary"):
-            st.session_state.admin_config['kpis_config'].update({
-                'objectif_cash_flow': objectif_cash_flow,
-                'objectif_ratio_actifs': objectif_ratio_actifs,
-                'objectif_revenus_passifs': objectif_revenus_passifs,
-                'objectif_fonds_urgence': objectif_fonds_urgence
-            })
-            st.success("✅ Configuration KPIs sauvegardée!")
+            mois_list = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", 
+                        "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
+            mois_actuel = revenu.get('mois', 'Janvier')
+            mois_index = mois_list.index(mois_actuel) if mois_actuel in mois_list else 0
+            mois = st.selectbox("*Mois", mois_list, index=mois_index)
+            
+            annee = st.number_input("*Année", min_value=2020, max_value=2030, value=int(revenu.get('annee', 2025)), step=1)
+            
+            responsables = st.session_state.config_admin['listes']['responsables']
+            responsable_actuel = safe_get(revenu, 'responsable', 'William')
+            responsable_index = responsables.index(responsable_actuel) if responsable_actuel in responsables else 0
+            responsable = st.selectbox("*Responsable", responsables, index=responsable_index)
+        
+        recurrent = st.checkbox("Revenu récurrent", value=revenu.get('recurrent', False))
+        description = st.text_area("Description", value=revenu.get('description', ''))
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            submitted = st.form_submit_button("✅ Sauvegarder", type="primary")
+        with col2:
+            cancel = st.form_submit_button("❌ Annuler")
+        
+        if submitted:
+            # Validation
+            if not nom or not montant or montant <= 0:
+                st.error("⚠️ Le nom et le montant sont obligatoires")
+                return
+            
+            # Mise à jour
+            for r in st.session_state.revenus:
+                if r.get('id') == st.session_state.edit_revenue_id:
+                    r.update({
+                        'nom': nom,
+                        'type': type_revenu,
+                        'montant': int(montant),
+                        'mois': mois,
+                        'annee': int(annee),
+                        'recurrent': recurrent,
+                        'description': description,
+                        'responsable': responsable,
+                        'date_modification': datetime.now()
+                    })
+                    break
+            
+            st.session_state.edit_revenue_id = None
+            st.success("✅ Revenu mis à jour avec succès!")
+            st.rerun()
+        
+        if cancel:
+            st.session_state.edit_revenue_id = None
             st.rerun()
 
-def show_admin_listes():
-    """Configuration des listes et vocabulaire"""
-    st.subheader("📋 Configuration des Listes et Vocabulaire")
+def show_mentors_page():
+    """Page conseils des 3 mentors avec sélection de projet"""
+    st.markdown('<div class="main-header"><h1>🎯 Conseils des 3 Mentors Financiers</h1></div>', unsafe_allow_html=True)
+    
+    # Sélection de projet avec filtre par période
+    mois_filtre = st.session_state.get('mois_filtre')
+    annee_filtre = st.session_state.get('annee_filtre')
+    
+    projets_filtres = st.session_state.projets
+    # Le filtre par période n'est pas directement applicable aux projets, mais on peut l'utiliser pour contextualiser
+    
+    if not projets_filtres:
+        st.warning("Aucun projet disponible pour analyse.")
+        return
+    
+    projet_noms = [f"{p.get('nom', 'Projet')} ({p.get('type', 'Type')})" for p in projets_filtres]
+    
+    selected_index = st.selectbox("Sélectionnez un projet à analyser", 
+                                 range(len(projet_noms)),
+                                 format_func=lambda x: projet_noms[x])
+    
+    projet_selectionne = projets_filtres[selected_index]
+    
+    st.markdown("---")
+    
+    # Affichage des conseils des 3 mentors
+    show_mentors_advice(projet_selectionne, detailed=True)
 
-    # Types de projet
-    with st.expander("🏗️ Types de Projets", expanded=False):
-        with st.form("admin_types_form"):
-            types_actuels = st.session_state.admin_config['listes_config']['types_projet']
+def show_mentors_advice(projet, detailed=False):
+    """Affiche les conseils des 3 mentors pour un projet"""
+    type_projet = projet.get('type', 'Actif générateur')
+    
+    if detailed:
+        st.subheader(f"🎯 Analyse du projet: {projet.get('nom', 'Projet')}")
+        
+        # Résumé du projet
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("💰 Budget", f"{projet.get('montant_total', 0):,.0f} FCFA")
+        with col2:
+            st.metric("📈 Cash Flow", f"{projet.get('cash_flow_mensuel', 0):,.0f} FCFA/mois")
+        with col3:
+            st.metric("🎯 ROI", f"{projet.get('roi_attendu', 0):.1f}%")
+    
+    # Conseils Robert Kiyosaki
+    conseil_kiyosaki = st.session_state.config_admin['conseils_mentors']['kiyosaki'].get(
+        type_projet, "Analysez si ce projet vous fait passer du quadrant E vers B ou I."
+    )
+    
+    st.markdown(f"""
+    <div class="mentor-kiyosaki">
+        <h4>💎 Robert Kiyosaki - "Père Riche, Père Pauvre"</h4>
+        <p><strong>Focus Quadrants E-S-B-I:</strong></p>
+        <p>{conseil_kiyosaki}</p>
+        <p><em>💡 Vocabulaire: Remplacez "dépense" par "passif" et "revenu" par "flux de trésorerie"</em></p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Conseils Warren Buffett
+    conseil_buffett = st.session_state.config_admin['conseils_mentors']['buffett'].get(
+        type_projet, "Investissez seulement dans ce que vous comprenez parfaitement."
+    )
+    
+    st.markdown(f"""
+    <div class="mentor-buffett">
+        <h4>🎯 Warren Buffett - "L'Oracle d'Omaha"</h4>
+        <p><strong>Focus Valeur Long Terme:</strong></p>
+        <p>{conseil_buffett}</p>
+        <p><em>💡 Question clé: "Seriez-vous prêt à garder cet investissement 10 ans ?"</em></p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Conseils Dave Ramsey
+    conseil_ramsey = st.session_state.config_admin['conseils_mentors']['ramsey'].get(
+        type_projet, "Respectez votre budget et évitez les dettes. Priorité au fonds d'urgence."
+    )
+    
+    st.markdown(f"""
+    <div class="mentor-ramsey">
+        <h4>💪 Dave Ramsey - "Baby Steps"</h4>
+        <p><strong>Focus Discipline Budgétaire:</strong></p>
+        <p>{conseil_ramsey}</p>
+        <p><em>💡 Règle d'or: 50% besoins, 30% envies, 20% épargne/investissement</em></p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    if detailed:
+        # Synthèse consensus
+        st.markdown("""
+        <div class="success-box">
+            <h4>🤝 Synthèse des 3 Mentors</h4>
+            <p><strong>Consensus:</strong> Analysez ce projet selon trois critères:</p>
+            <ul>
+                <li><strong>Kiyosaki:</strong> Est-ce un actif qui génère des revenus passifs ?</li>
+                <li><strong>Buffett:</strong> Comprenez-vous parfaitement ce business ?</li>
+                <li><strong>Ramsey:</strong> Respectez-vous votre discipline budgétaire ?</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
 
-            st.write("**Types actuels:**")
-            for i, type_p in enumerate(types_actuels):
-                st.write(f"• {type_p}")
-
-            nouveau_type = st.text_input("Ajouter un nouveau type")
-            type_a_supprimer = st.selectbox("Supprimer un type", ["Aucun"] + types_actuels)
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                if st.form_submit_button("➕ Ajouter"):
-                    if nouveau_type and nouveau_type not in types_actuels:
-                        st.session_state.admin_config['listes_config']['types_projet'].append(nouveau_type)
-                        st.success(f"Type '{nouveau_type}' ajouté!")
-                        st.rerun()
-
-            with col2:
-                if st.form_submit_button("🗑️ Supprimer"):
-                    if type_a_supprimer != "Aucun":
-                        st.session_state.admin_config['listes_config']['types_projet'].remove(type_a_supprimer)
-                        st.success(f"Type '{type_a_supprimer}' supprimé!")
-                        st.rerun()
-
-    # Statuts de projet
-    with st.expander("📊 Statuts de Projets", expanded=False):
-        with st.form("admin_statuts_form"):
-            statuts_actuels = st.session_state.admin_config['listes_config']['statuts_projet']
-
-            st.write("**Statuts actuels:**")
-            for statut in statuts_actuels:
-                st.write(f"• {statut}")
-
-            nouveau_statut = st.text_input("Ajouter un nouveau statut")
-            statut_a_supprimer = st.selectbox("Supprimer un statut", ["Aucun"] + statuts_actuels)
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                if st.form_submit_button("➕ Ajouter"):
-                    if nouveau_statut and nouveau_statut not in statuts_actuels:
-                        st.session_state.admin_config['listes_config']['statuts_projet'].append(nouveau_statut)
-                        st.success(f"Statut '{nouveau_statut}' ajouté!")
-                        st.rerun()
-
-            with col2:
-                if st.form_submit_button("🗑️ Supprimer"):
-                    if statut_a_supprimer != "Aucun":
-                        st.session_state.admin_config['listes_config']['statuts_projet'].remove(statut_a_supprimer)
-                        st.success(f"Statut '{statut_a_supprimer}' supprimé!")
-                        st.rerun()
-
-    # Responsables
-    with st.expander("👤 Responsables", expanded=False):
-        with st.form("admin_responsables_form"):
-            responsables_actuels = st.session_state.admin_config['listes_config']['responsables']
-
-            st.write("**Responsables actuels:**")
-            for resp in responsables_actuels:
-                st.write(f"• {resp}")
-
-            nouveau_responsable = st.text_input("Ajouter un nouveau responsable")
-            responsable_a_supprimer = st.selectbox("Supprimer un responsable", ["Aucun"] + responsables_actuels)
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                if st.form_submit_button("➕ Ajouter"):
-                    if nouveau_responsable and nouveau_responsable not in responsables_actuels:
-                        st.session_state.admin_config['listes_config']['responsables'].append(nouveau_responsable)
-                        st.success(f"Responsable '{nouveau_responsable}' ajouté!")
-                        st.rerun()
-
-            with col2:
-                if st.form_submit_button("🗑️ Supprimer"):
-                    if responsable_a_supprimer != "Aucun":
-                        st.session_state.admin_config['listes_config']['responsables'].remove(responsable_a_supprimer)
-                        st.success(f"Responsable '{responsable_a_supprimer}' supprimé!")
-                        st.rerun()
-
-def show_admin_mentors():
-    """Configuration des conseils des mentors"""
-    st.subheader("🧠 Configuration des Conseils des Mentors")
-
-    mentors = ["Kiyosaki", "Buffett", "Ramsey"]
-    types_projet = st.session_state.admin_config['listes_config']['types_projet']
-
-    for mentor in mentors:
-        with st.expander(f"🎯 {mentor}", expanded=False):
-            st.markdown(f"### Conseils de {mentor}")
-
-            with st.form(f"admin_mentor_{mentor}_form"):
-                conseils_actuels = st.session_state.admin_config['mentors_conseils'][mentor]
-
-                for type_projet in types_projet:
-                    conseil_actuel = conseils_actuels.get(type_projet, "")
-                    nouveau_conseil = st.text_area(
-                        f"Conseil pour '{type_projet}'",
-                        value=conseil_actuel,
-                        height=100,
-                        key=f"{mentor}_{type_projet}"
-                    )
-
-                    # Mise à jour immédiate
-                    st.session_state.admin_config['mentors_conseils'][mentor][type_projet] = nouveau_conseil
-
-                if st.form_submit_button(f"💾 Sauvegarder conseils {mentor}", type="primary"):
-                    st.success(f"✅ Conseils de {mentor} sauvegardés!")
-                    st.rerun()
-
-def show_admin_export_import():
-    """Export/Import des données"""
-    st.subheader("📊 Export/Import des Données")
-
+def show_analytics():
+    """Page Analytics & KPIs Avancés avec filtre période"""
+    st.markdown('<div class="main-header"><h1>📊 Analytics & KPIs Avancés</h1></div>', unsafe_allow_html=True)
+    
+    # Récupération des filtres
+    mois_filtre = st.session_state.get('mois_filtre')
+    annee_filtre = st.session_state.get('annee_filtre')
+    
+    # Calcul des KPIs avec filtre
+    kpis = calculer_kpis(st.session_state.projets, st.session_state.revenus, mois_filtre, annee_filtre)
+    
+    # Affichage période active
+    periode = "Toutes les données"
+    if mois_filtre and mois_filtre != "Tout" and annee_filtre and annee_filtre != "Tout":
+        periode = f"{mois_filtre} {annee_filtre}"
+    elif mois_filtre and mois_filtre != "Tout":
+        periode = f"Tous les {mois_filtre}"
+    elif annee_filtre and annee_filtre != "Tout":
+        periode = f"Année {annee_filtre}"
+    
+    st.info(f"📅 **Analyse pour :** {periode}")
+    
+    # Tableau Passifs vs Actifs selon Kiyosaki
+    st.subheader("💎 Analyse Kiyosaki - Actifs vs Passifs")
+    
+    quadrant, status_rat = determiner_quadrant_kiyosaki(st.session_state.projets, st.session_state.revenus)
+    
+    # Tableau comparatif
     col1, col2 = st.columns(2)
-
+    
     with col1:
-        st.markdown("### 📤 Exporter les Données")
-
-        if st.button("📊 Générer Export Excel", type="primary"):
-            try:
-                excel_data = export_to_excel()
-
-                # Nom du fichier avec timestamp
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-                filename = f"Plan_Financier_Familial_{timestamp}.xlsx"
-
-                st.download_button(
-                    label="💾 Télécharger Excel",
-                    data=excel_data,
-                    file_name=filename,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    type="primary"
-                )
-
-                st.success("✅ Export Excel généré avec succès!")
-
-            except Exception as e:
-                st.error(f"❌ Erreur lors de l'export: {str(e)}")
-
-        # Statistiques export
-        st.markdown("### 📈 Contenu de l'Export")
-        st.write(f"• **{len(st.session_state.projets)}** projets")
-        st.write(f"• **{len(st.session_state.revenus_variables)}** revenus")
-        st.write("• **Configuration** complète")
-        st.write("• **KPIs** calculés")
-        st.write("• **Suivi mensuel** détaillé")
-
+        st.markdown("#### 📈 ACTIFS (mettent de l'argent dans votre poche)")
+        actifs_data = []
+        for projet in st.session_state.projets:
+            if projet.get('cash_flow_mensuel', 0) > 0:
+                actifs_data.append({
+                    'Nom': projet.get('nom', ''),
+                    'Cash Flow/mois': f"{projet.get('cash_flow_mensuel', 0):,.0f} FCFA",
+                    'ROI': f"{projet.get('roi_attendu', 0):.1f}%"
+                })
+        
+        if actifs_data:
+            df_actifs = pd.DataFrame(actifs_data)
+            st.dataframe(df_actifs, use_container_width=True)
+            total_actifs_cashflow = sum(p.get('cash_flow_mensuel', 0) for p in st.session_state.projets if p.get('cash_flow_mensuel', 0) > 0)
+            st.success(f"💰 Total revenus passifs: {total_actifs_cashflow:,.0f} FCFA/mois")
+        else:
+            st.warning("❌ Aucun actif générateur identifié")
+    
     with col2:
-        st.markdown("### 📥 Importer des Données")
-
-        st.info("""
-        **🔄 Fonctionnalité Import**
-
-        L'import de données sera disponible dans une future version.
-
-        Pour l'instant, vous pouvez :
-        1. Exporter vos données actuelles
-        2. Les modifier dans Excel
-        3. Les réimporter manuellement via l'interface
-        """)
-
-        uploaded_file = st.file_uploader(
-            "Choisir un fichier Excel",
-            type=['xlsx'],
-            help="Fonctionnalité en développement"
-        )
-
-        if uploaded_file:
-            st.warning("⚠️ Import automatique pas encore disponible")
-
-    # Sauvegarde JSON
-    st.markdown("### 💾 Sauvegarde Configuration")
-
-    if st.button("📋 Générer Sauvegarde JSON"):
-        backup_data = {
-            'projets': st.session_state.projets,
-            'revenus_variables': st.session_state.revenus_variables,
-            'admin_config': st.session_state.admin_config,
-            'timestamp': datetime.now().isoformat()
+        st.markdown("#### 📉 PASSIFS (sortent de l'argent de votre poche)")
+        passifs_data = []
+        for projet in st.session_state.projets:
+            if projet.get('cash_flow_mensuel', 0) < 0:
+                passifs_data.append({
+                    'Nom': projet.get('nom', ''),
+                    'Cash Flow/mois': f"{projet.get('cash_flow_mensuel', 0):,.0f} FCFA",
+                    'Budget Total': f"{projet.get('montant_total', 0):,.0f} FCFA"
+                })
+        
+        if passifs_data:
+            df_passifs = pd.DataFrame(passifs_data)
+            st.dataframe(df_passifs, use_container_width=True)
+            total_passifs_cashflow = abs(sum(p.get('cash_flow_mensuel', 0) for p in st.session_state.projets if p.get('cash_flow_mensuel', 0) < 0))
+            st.error(f"💸 Total sorties: {total_passifs_cashflow:,.0f} FCFA/mois")
+        else:
+            st.info("✅ Aucun passif identifié")
+    
+    # Quadrants E-S-B-I de Kiyosaki
+    st.markdown("---")
+    st.subheader("🎯 Quadrants Kiyosaki E-S-B-I")
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        # Calcul des pourcentages par quadrant
+        revenus_par_type = {}
+        for revenu in st.session_state.revenus:
+            type_rev = revenu.get('type', 'Autre')
+            revenus_par_type[type_rev] = revenus_par_type.get(type_rev, 0) + revenu.get('montant', 0)
+        
+        quadrants_data = {
+            'E - Employee (Salaire)': revenus_par_type.get('Salaire', 0),
+            'S - Self Employed (Business actif)': revenus_par_type.get('Business', 0),
+            'B - Business Owner (Système)': revenus_par_type.get('Loyer', 0),
+            'I - Investor (Passif)': revenus_par_type.get('Investissement', 0)
         }
-
-        # Convertir les dates en strings pour JSON
-        for projet in backup_data['projets']:
-            if 'echeance' in projet:
-                projet['echeance'] = projet['echeance'].isoformat()
-            if 'date_creation' in projet:
-                projet['date_creation'] = projet['date_creation'].isoformat()
-            if 'date_modification' in projet:
-                projet['date_modification'] = projet['date_modification'].isoformat()
-
-        for revenu in backup_data['revenus_variables']:
-            if 'date_creation' in revenu:
-                revenu['date_creation'] = revenu['date_creation'].isoformat()
-            if 'date_modification' in revenu:
-                revenu['date_modification'] = revenu['date_modification'].isoformat()
-
-        json_data = json.dumps(backup_data, indent=2, ensure_ascii=False)
-
-        st.download_button(
-            label="💾 Télécharger Sauvegarde JSON",
-            data=json_data,
-            file_name=f"sauvegarde_plan_financier_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
-            mime="application/json"
-        )
-
-def show_admin_stats():
-    """Statistiques système"""
-    st.subheader("📈 Statistiques du Système")
-
-    # Statistiques générales
+        
+        if any(quadrants_data.values()):
+            fig_quadrants = px.pie(
+                values=list(quadrants_data.values()),
+                names=list(quadrants_data.keys()),
+                title="Répartition des revenus par Quadrant Kiyosaki"
+            )
+            st.plotly_chart(fig_quadrants, use_container_width=True)
+        else:
+            st.info("Aucune donnée de revenus disponible pour l'analyse des quadrants")
+    
+    with col2:
+        st.markdown(f"""
+        <div class="metric-card" style="text-align: center;">
+            <h3>Position Actuelle</h3>
+            <h2 style="color: {'#dc3545' if 'Rat' in status_rat else '#28a745' if 'Liberté' in status_rat else '#ffc107'};">
+                Quadrant {quadrant}
+            </h2>
+            <p>{status_rat}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Recommandations selon quadrant
+        if quadrant == "E":
+            st.warning("🎯 **Objectif:** Développer des revenus B et I pour sortir de la Rat Race")
+        elif quadrant == "S/B":
+            st.info("🔄 **En transition:** Continuez à développer des systèmes et investissements")
+        elif quadrant == "I":
+            st.success("🎉 **Bravo!** Vous êtes sur la voie de l'indépendance financière")
+        else:
+            st.info("📊 **Portfolio mixte:** Équilibrez davantage vers B et I")
+    
+    # KPIs détaillés avec filtres
+    st.markdown("---")
+    st.subheader(f"📊 KPIs Détaillés - {periode}")
+    
     col1, col2, col3, col4 = st.columns(4)
-
+    
     with col1:
-        st.metric("📊 Total Projets", len(st.session_state.projets))
-
+        st.metric("💰 Total Investissements", f"{kpis['total_investissements']:,.0f} FCFA")
+        st.metric("📈 Actifs Générateurs", f"{kpis['nombre_actifs']} projets")
+    
     with col2:
-        st.metric("💰 Total Revenus", len(st.session_state.revenus_variables))
-
+        st.metric("💸 Total Passifs", f"{kpis['total_passifs']:,.0f} FCFA") 
+        st.metric("🏦 Fonds d'Urgence", f"{kpis['fonds_urgence']:,.0f} FCFA")
+    
     with col3:
-        total_suivi = sum(len(p.get('suivi_mensuel', [])) for p in st.session_state.projets)
-        st.metric("📋 Entrées Suivi", total_suivi)
-
+        st.metric("📊 Ratio Actifs/Passifs", f"{kpis['ratio_actifs_passifs']:.1f}%")
+        st.metric("🎯 Revenus Passifs", f"{kpis['ratio_revenus_passifs']:.1f}%")
+    
     with col4:
-        total_budget = sum(p['montant_total'] for p in st.session_state.projets)
-        st.metric("💸 Budget Total", format_currency(total_budget))
-
-    # Graphiques statistiques
-    st.markdown("### 📊 Répartitions")
-
+        st.metric("💵 Cash Flow Net", f"{kpis['cash_flow_mensuel']:,.0f} FCFA/mois")
+        st.metric("👶 Baby Step", f"Étape {kpis['baby_step']}")
+    
+    # Graphiques avancés
     col1, col2 = st.columns(2)
-
+    
     with col1:
-        # Répartition par type
-        type_counts = {}
-        for projet in st.session_state.projets:
-            type_p = projet['type']
-            type_counts[type_p] = type_counts.get(type_p, 0) + 1
-
-        if type_counts:
-            fig = px.pie(
-                values=list(type_counts.values()),
-                names=list(type_counts.keys()),
-                title="Répartition des Projets par Type"
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
+        # Évolution projetée 
+        mois = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+        cash_flow_evolution = []
+        base_cf = kpis['cash_flow_mensuel']
+        
+        for i, m in enumerate(mois):
+            # Simulation d'évolution avec croissance progressive
+            variation = base_cf * (1 + i * 0.05)  # 5% croissance par mois
+            cash_flow_evolution.append(variation)
+        
+        fig_evolution = px.line(x=mois, y=cash_flow_evolution, 
+                               title=f"Projection Cash Flow 2025 - {periode}")
+        fig_evolution.add_hline(y=0, line_dash="dash", line_color="red", 
+                               annotation_text="Seuil rentabilité")
+        st.plotly_chart(fig_evolution, use_container_width=True)
+    
     with col2:
-        # Répartition par responsable
-        resp_counts = {}
+        # Répartition par catégorie
+        categories = {}
         for projet in st.session_state.projets:
-            resp = safe_get(projet, 'responsable', 'Non défini')
-            resp_counts[resp] = resp_counts.get(resp, 0) + 1
+            cat = projet.get('categorie', 'Autre')
+            categories[cat] = categories.get(cat, 0) + projet.get('montant_total', 0)
+        
+        if categories:
+            fig_categories = px.bar(x=list(categories.keys()), y=list(categories.values()),
+                                   title=f"Investissements par Catégorie - {periode}")
+            st.plotly_chart(fig_categories, use_container_width=True)
 
-        if resp_counts:
-            fig = px.bar(
-                x=list(resp_counts.keys()),
-                y=list(resp_counts.values()),
-                title="Nombre de Projets par Responsable",
-                labels={'x': 'Responsable', 'y': 'Nombre de projets'}
-            )
-            st.plotly_chart(fig, use_container_width=True)
+def show_progression():
+    """Page progression familiale vers indépendance"""
+    st.markdown('<div class="main-header"><h1>🚀 Progression Familiale</h1></div>', unsafe_allow_html=True)
+    
+    # Calcul des KPIs avec filtre
+    mois_filtre = st.session_state.get('mois_filtre')
+    annee_filtre = st.session_state.get('annee_filtre')
+    kpis = calculer_kpis(st.session_state.projets, st.session_state.revenus, mois_filtre, annee_filtre)
+    
+    # Baby Steps Dave Ramsey
+    st.subheader("👶 Baby Steps Dave Ramsey")
+    
+    # Information sur les Baby Steps
+    st.markdown("""
+    <div class="info-tooltip">
+        <h4>ℹ️ Les 7 Baby Steps de Dave Ramsey</h4>
+        <p>Méthodologie éprouvée pour atteindre l'indépendance financière étape par étape.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    baby_steps = [
+        {"num": 1, "titre": "Fonds d'urgence de démarrage", "montant": 500000, "description": "500k FCFA pour les petites urgences"},
+        {"num": 2, "titre": "Éliminer toutes les dettes", "montant": 0, "description": "Sauf la résidence principale"},
+        {"num": 3, "titre": "Fonds d'urgence complet", "montant": abs(kpis['cash_flow_mensuel']) * 6, "description": "3-6 mois de dépenses"},
+        {"num": 4, "titre": "Investir 15% revenus", "montant": kpis['total_revenus'] * 0.15, "description": "Pour la retraite"},
+        {"num": 5, "titre": "Épargne université enfants", "montant": 2000000, "description": "Fonds éducation Uriel, Naelle, Nell-Henri"},
+        {"num": 6, "titre": "Rembourser résidence", "montant": 0, "description": "Propriété sans dette"},
+        {"num": 7, "titre": "Construire richesse", "montant": 10000000, "description": "Investir et donner"}
+    ]
+    
+    current_step = kpis['baby_step']
+    
+    for step in baby_steps:
+        statut = "✅ Terminé" if step['num'] < current_step else "🔄 En cours" if step['num'] == current_step else "⏳ À venir"
+        couleur = "#28a745" if step['num'] < current_step else "#ffc107" if step['num'] == current_step else "#6c757d"
+        
+        st.markdown(f"""
+        <div style="border-left: 4px solid {couleur}; padding: 1rem; margin: 0.5rem 0; background: {'#d4edda' if step['num'] < current_step else '#fff3cd' if step['num'] == current_step else '#f8f9fa'};">
+            <h4>Baby Step {step['num']}: {step['titre']} {statut}</h4>
+            <p>{step['description']}</p>
+            {f"<strong>Objectif: {step['montant']:,.0f} FCFA</strong>" if step['montant'] > 0 else ""}
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Information fonds d'urgence
+    st.markdown("""
+    <div class="warning-box">
+        <h4>💡 Comment mesurer le fonds d'urgence ?</h4>
+        <p><strong>Deux options pour créer votre fonds d'urgence :</strong></p>
+        <ul>
+            <li><strong>Option 1:</strong> Créer un projet spécifique "Fonds d'urgence" avec le montant cible</li>
+            <li><strong>Option 2:</strong> Utiliser un compte épargne séparé (recommandé)</li>
+        </ul>
+        <p><strong>Calcul automatique:</strong> Le système détecte automatiquement les projets contenant "urgence" dans le nom.</p>
+        <p><strong>Objectif actuel:</strong> {abs(kpis['cash_flow_mensuel']) * 6:,.0f} FCFA (6 mois de dépenses courantes)</p>
+    </div>
+    """.format(**kpis), unsafe_allow_html=True)
+    
+    # Progression vers indépendance
+    st.markdown("---")
+    st.subheader("🎯 Progression Familiale vers l'Indépendance")
+    
+    # Calcul du pourcentage d'indépendance
+    revenus_passifs_requis = abs(kpis['cash_flow_mensuel']) * 1.2  # 120% pour marge de sécurité
+    pct_independance = min((kpis['revenus_passifs'] / max(revenus_passifs_requis, 1)) * 100, 100) if revenus_passifs_requis > 0 else 0
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.markdown(f"""
+        <div class="progress-bar">
+            <div class="progress-fill" style="width: {pct_independance}%; background: linear-gradient(90deg, #ff6b6b, #4ecdc4, #45b7d1);"></div>
+        </div>
+        <p style="text-align: center; margin-top: 0.5rem;"><strong>{pct_independance:.1f}% vers l'indépendance financière</strong></p>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        phase_couleurs = {"Stabilisation": "#dc3545", "Transition": "#ffc107", "Expansion": "#28a745"}
+        st.markdown(f"""
+        <div class="metric-card" style="text-align: center;">
+            <h3>Phase Actuelle</h3>
+            <h2 style="color: {phase_couleurs.get(kpis['phase'], '#20b2aa')};">{kpis['phase']}</h2>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Étapes pour passer à la phase suivante
+    st.markdown("""
+    <div class="info-tooltip">
+        <h4>📋 Comment passer à la phase suivante ?</h4>
+        <p><strong>Stabilisation → Transition :</strong></p>
+        <ul>
+            <li>Cash flow mensuel positif ou proche de zéro</li>
+            <li>Au moins 20% d'actifs générateurs</li>
+            <li>Fonds d'urgence constitué</li>
+        </ul>
+        <p><strong>Transition → Expansion :</strong></p>
+        <ul>
+            <li>Cash flow mensuel durablement positif</li>
+            <li>Plus de 40% d'actifs générateurs</li>
+            <li>Revenus passifs couvrant 50%+ des dépenses</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Règle 50/30/20
+    st.markdown("---")
+    st.subheader("📊 Règle 50/30/20 de Dave Ramsey")
+    
+    total_revenus = kpis['total_revenus']
+    if total_revenus > 0:
+        besoins_max = total_revenus * 0.5
+        envies_max = total_revenus * 0.3
+        epargne_min = total_revenus * 0.2
+        
+        # Calcul réel
+        besoins_reel = sum(p.get('montant_total', 0) for p in st.session_state.projets 
+                          if p.get('categorie') in ['Éducation', 'Personnel'] or 'essentiel' in p.get('description', '').lower())
+        envies_reel = sum(p.get('montant_total', 0) for p in st.session_state.projets 
+                         if p.get('categorie') == 'Familial' or p.get('type') == 'Passif')
+        epargne_reel = sum(p.get('montant_total', 0) for p in st.session_state.projets 
+                          if p.get('type') == 'Actif générateur')
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            respect_besoins = besoins_reel <= besoins_max
+            couleur = "#28a745" if respect_besoins else "#dc3545"
+            st.markdown(f"""
+            <div style="border: 2px solid {couleur}; padding: 1rem; border-radius: 8px;">
+                <h4>🏠 BESOINS (50%)</h4>
+                <p><strong>Budget:</strong> {besoins_max:,.0f} FCFA</p>
+                <p><strong>Réel:</strong> {besoins_reel:,.0f} FCFA</p>
+                <p style="color: {couleur};"><strong>{'✅ Respecté' if respect_besoins else '❌ Dépassé'}</strong></p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            respect_envies = envies_reel <= envies_max
+            couleur = "#28a745" if respect_envies else "#dc3545"
+            st.markdown(f"""
+            <div style="border: 2px solid {couleur}; padding: 1rem; border-radius: 8px;">
+                <h4>🎯 ENVIES (30%)</h4>
+                <p><strong>Budget:</strong> {envies_max:,.0f} FCFA</p>
+                <p><strong>Réel:</strong> {envies_reel:,.0f} FCFA</p>
+                <p style="color: {couleur};"><strong>{'✅ Respecté' if respect_envies else '❌ Dépassé'}</strong></p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            respect_epargne = epargne_reel >= epargne_min
+            couleur = "#28a745" if respect_epargne else "#dc3545"
+            st.markdown(f"""
+            <div style="border: 2px solid {couleur}; padding: 1rem; border-radius: 8px;">
+                <h4>💰 ÉPARGNE (20%)</h4>
+                <p><strong>Minimum:</strong> {epargne_min:,.0f} FCFA</p>
+                <p><strong>Réel:</strong> {epargne_reel:,.0f} FCFA</p>
+                <p style="color: {couleur};"><strong>{'✅ Respecté' if respect_epargne else '❌ Insuffisant'}</strong></p>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # Évolution par période
+    st.markdown("---")
+    st.subheader("📈 Évolution par Période")
+    
+    # Texte explicatif
+    st.markdown("""
+    <div class="info-tooltip">
+        <h4>📖 Comment lire ces graphiques ?</h4>
+        <p><strong>Graphique 1 - Évolution Cash Flow:</strong> Montre l'évolution de votre cash flow mensuel. 
+        Objectif: ligne au-dessus de zéro (cash flow positif).</p>
+        <p><strong>Graphique 2 - Progression Actifs/Passifs:</strong> Montre l'équilibre entre vos actifs (qui rapportent) 
+        et passifs (qui coûtent). Objectif: plus d'actifs que de passifs.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Génération résumé dynamique basé sur les données
+    periode_actuelle = "toutes les données"
+    if mois_filtre and mois_filtre != "Tout":
+        periode_actuelle = f"le mois de {mois_filtre.lower()}"
+    if annee_filtre and annee_filtre != "Tout":
+        periode_actuelle = f"l'année {annee_filtre}"
+    
+    # Analyse dynamique simple (sans IA)
+    tendance_cash_flow = "positive" if kpis['cash_flow_mensuel'] > 0 else "négative"
+    niveau_actifs = "élevé" if kpis['ratio_actifs_passifs'] > 50 else "moyen" if kpis['ratio_actifs_passifs'] > 20 else "faible"
+    
+    st.markdown(f"""
+    <div class="success-box" style="background: #e3f2fd; border-color: #2196f3;">
+        <h4>🤖 Analyse Dynamique - {periode_actuelle.title()}</h4>
+        <p><strong>Tendance Cash Flow:</strong> {tendance_cash_flow.upper()} 
+        ({kpis['cash_flow_mensuel']:,.0f} FCFA/mois)</p>
+        <p><strong>Niveau d'actifs:</strong> {niveau_actifs.upper()} 
+        ({kpis['ratio_actifs_passifs']:.1f}% ratio actifs/passifs)</p>
+        <p><strong>Recommandation:</strong> 
+        {"Continuez sur cette voie, votre situation s'améliore!" if tendance_cash_flow == "positive" else "Concentrez-vous sur la création d'actifs générateurs de revenus."}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Graphiques évolution
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        mois = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+        # Simulation évolution cash flow
+        cf_evolution = []
+        base_cf = kpis['cash_flow_mensuel']
+        for i in range(12):
+            variation = base_cf + (i * 50000) + np.random.randint(-100000, 150000)
+            cf_evolution.append(variation)
+        
+        fig_cf = px.line(x=mois, y=cf_evolution, title="Évolution Cash Flow Mensuel")
+        fig_cf.add_hline(y=0, line_dash="dash", line_color="red")
+        st.plotly_chart(fig_cf, use_container_width=True)
+    
+    with col2:
+        # Évolution ratio actifs/passifs
+        ratios = []
+        base_ratio = kpis['ratio_actifs_passifs']
+        for i in range(12):
+            nouveau_ratio = base_ratio + (i * 2) + np.random.uniform(-5, 10)
+            ratios.append(max(0, nouveau_ratio))
+        
+        fig_ratio = px.bar(x=mois, y=ratios, title="Évolution Ratio Actifs/Passifs (%)")
+        fig_ratio.add_hline(y=50, line_dash="dash", line_color="green", annotation_text="Objectif 50%")
+        st.plotly_chart(fig_ratio, use_container_width=True)
 
-    # Historique des modifications
-    st.markdown("### 📅 Activité Récente")
-
-    # Combine projets et revenus avec leurs dates de modification
-    activites = []
-
-    for projet in st.session_state.projets:
-        date_modif = safe_get(projet, 'date_modification', datetime.now())
-        if isinstance(date_modif, str):
-            date_modif = datetime.fromisoformat(date_modif)
-        activites.append({
-            'type': 'Projet',
-            'nom': projet['nom'],
-            'date': date_modif,
-            'responsable': safe_get(projet, 'responsable', 'Non défini')
-        })
-
-    for revenu in st.session_state.revenus_variables:
-        date_modif = safe_get(revenu, 'date_modification', datetime.now())
-        if isinstance(date_modif, str):
-            date_modif = datetime.fromisoformat(date_modif)
-        activites.append({
-            'type': 'Revenu',
-            'nom': revenu['nom'],
-            'date': date_modif,
-            'responsable': safe_get(revenu, 'responsable', 'Non défini')
-        })
-
-    # Trier par date de modification (plus récent d'abord)
-    activites.sort(key=lambda x: x['date'], reverse=True)
-
-    # Afficher les 10 plus récentes
-    if activites:
-        df_activites = pd.DataFrame(activites[:10])
-        df_activites['date'] = df_activites['date'].dt.strftime('%d/%m/%Y %H:%M')
-        st.dataframe(df_activites, use_container_width=True, hide_index=True)
+def show_education():
+    """Page éducation financière des enfants"""
+    st.markdown('<div class="main-header"><h1>👨‍👩‍👧‍👦 Éducation Financière des Enfants</h1></div>', unsafe_allow_html=True)
+    
+    # Calcul des âges selon l'année filtrée
+    annee_filtre = st.session_state.get('annee_filtre', 2025)
+    if annee_filtre == "Tout":
+        annee_reference = 2025
     else:
-        st.info("Aucune activité récente")
+        annee_reference = int(annee_filtre) if isinstance(annee_filtre, str) and annee_filtre.isdigit() else annee_filtre
+    
+    # Âges de base en 2025
+    ages_2025 = {"Uriel": 14, "Naelle": 7, "Nell-Henri": 5}
+    difference_annee = annee_reference - 2025
+    
+    ages_actuels = {enfant: age + difference_annee for enfant, age in ages_2025.items()}
+    
+    st.info(f"📅 **Âges pour l'année {annee_reference}:** Uriel ({ages_actuels['Uriel']} ans), Naelle ({ages_actuels['Naelle']} ans), Nell-Henri ({ages_actuels['Nell-Henri']} ans)")
+    
+    # Programme par enfant
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown(f"""
+        <div class="project-card" style="border-left-color: #ff6b6b;">
+            <h3>🎨 Uriel ({ages_actuels['Uriel']} ans)</h3>
+            <h4>Programme Avancé</h4>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if ages_actuels['Uriel'] >= 14:
+            st.write("**📚 Concepts à enseigner:**")
+            st.write("• Différence Actifs vs Passifs")
+            st.write("• Quadrants E-S-B-I de Kiyosaki")
+            st.write("• ROI et Cash Flow")
+            st.write("• Business plan simple")
+            
+            st.write("**🎯 Activités pratiques:**")
+            st.write("• Jeu Cashflow de Kiyosaki")
+            st.write("• Création business artistique")
+            st.write("• Participation décisions familiales")
+            st.write("• Gestion compte bancaire")
+        else:
+            st.write(f"**Programme adapté pour {ages_actuels['Uriel']} ans:**")
+            st.write("• Valeur de l'argent")
+            st.write("• Épargne vs dépense")
+            st.write("• Premiers choix financiers")
+    
+    with col2:
+        st.markdown(f"""
+        <div class="project-card" style="border-left-color: #4ecdc4;">
+            <h3>🌟 Naelle ({ages_actuels['Naelle']} ans)</h3>
+            <h4>Programme Intermédiaire</h4>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if ages_actuels['Naelle'] >= 7:
+            st.write("**📚 Concepts à enseigner:**")
+            st.write("• Épargne vs dépense")
+            st.write("• Notion 'argent qui travaille'")
+            st.write("• Besoins vs envies")
+            st.write("• Patience financière")
+            
+            st.write("**🎯 Activités pratiques:**")
+            st.write("• Tirelire transparente")
+            st.write("• Premiers choix d'achat")
+            st.write("• Jeux éducatifs financiers")
+            st.write("• Identification des 'actifs'")
+        else:
+            st.write(f"**Programme adapté pour {ages_actuels['Naelle']} ans:**")
+            st.write("• Reconnaissance des pièces/billets")
+            st.write("• Concept simple d'échange")
+            st.write("• Patience et attente")
+    
+    with col3:
+        st.markdown(f"""
+        <div class="project-card" style="border-left-color: #45b7d1;">
+            <h3>⭐ Nell-Henri ({ages_actuels['Nell-Henri']} ans)</h3>
+            <h4>Programme Découverte</h4>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if ages_actuels['Nell-Henri'] >= 5:
+            st.write("**📚 Concepts à enseigner:**")
+            st.write("• Valeur de l'argent")
+            st.write("• Garder vs dépenser")
+            st.write("• Concept simple d'échange")
+            st.write("• 'Sous qui rapportent des sous'")
+            
+            st.write("**🎯 Activités pratiques:**")
+            st.write("• Jeux avec pièces/billets")
+            st.write("• Premier 'investissement' (livre)")
+            st.write("• Comptage simple")
+            st.write("• Observation des achats")
+        else:
+            st.write(f"**Programme adapté pour {ages_actuels['Nell-Henri']} ans:**")
+            st.write("• Reconnaissance des couleurs/formes")
+            st.write("• Jeux sensoriels avec objets")
+            st.write("• Concept très simple d'échange")
+    
+    # Planning éducatif annuel
+    st.markdown("---")
+    st.subheader(f"📅 Planning Éducatif {annee_reference}")
+    
+    mois_activites = [
+        {"mois": "Janvier", "activite": "Lancement tirelires & objectifs annuels", "enfants": "Tous"},
+        {"mois": "Février", "activite": "Jeu 'Besoins vs Envies' en famille", "enfants": "Naelle + Nell-Henri"},
+        {"mois": "Mars", "activite": "Première sortie 'éducation financière'", "enfants": "Tous"},
+        {"mois": "Avril", "activite": "Visite banque éducative", "enfants": "Uriel + Naelle"},
+        {"mois": "Mai", "activite": "Business plan artistique Uriel", "enfants": "Uriel"},
+        {"mois": "Juin", "activite": "Jeu Cashflow familial", "enfants": "Tous"},
+        {"mois": "Juillet", "activite": "Évaluation mi-année des objectifs", "enfants": "Tous"},
+        {"mois": "Août", "activite": "Préparation budget rentrée", "enfants": "Uriel + Naelle"},
+        {"mois": "Septembre", "activite": "Nouvelle tirelire projet spécial", "enfants": "Tous"},
+        {"mois": "Octobre", "activite": "Exposition art Uriel & gestion finances", "enfants": "Uriel"},
+        {"mois": "Novembre", "activite": "Préparation budget Noël", "enfants": "Tous"},
+        {"mois": "Décembre", "activite": "Bilan annuel & objectifs année suivante", "enfants": "Tous"}
+    ]
+    
+    for activite in mois_activites:
+        with st.expander(f"{activite['mois']} - {activite['activite']}"):
+            st.write(f"**👥 Enfants concernés:** {activite['enfants']}")
+            
+            if activite['mois'] == "Janvier":
+                st.write("**📋 Détails:** Chaque enfant définit un objectif d'épargne adapté à son âge. Uriel peut viser l'achat d'un matériel artistique, Naelle un jouet éducatif, Nell-Henri des autocollants.")
+            elif activite['mois'] == "Mai" and ages_actuels['Uriel'] >= 14:
+                st.write("**📋 Détails:** Uriel développe un business plan pour ses créations artistiques : coûts matériaux, prix de vente, marge, réinvestissement.")
+            elif activite['mois'] == "Juin":
+                st.write("**📋 Détails:** Version simplifiée du jeu Cashflow adaptée aux différents âges. Focus sur les concepts actifs/passifs.")
+            elif activite['mois'] == "Octobre" and ages_actuels['Uriel'] >= 14:
+                st.write("**📋 Détails:** Uriel gère intégralement les aspects financiers de son exposition : budget, revenus, bénéfices, réinvestissement.")
+            else:
+                st.write("**📋 Détails:** Activité adaptée aux âges et capacités de chaque enfant, avec support parental selon besoin.")
+            
+            # Statut de l'activité
+            mois_actuel = datetime.now().month
+            mois_index = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", 
+                         "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"].index(activite['mois']) + 1
+            
+            if annee_reference == 2025:
+                if mois_index < mois_actuel:
+                    st.success("✅ **Statut:** Complété")
+                elif mois_index == mois_actuel:
+                    st.warning("🔄 **Statut:** En cours")
+                else:
+                    st.info("⏳ **Statut:** À venir")
+            else:
+                st.info(f"📅 **Statut:** Planifié pour {annee_reference}")
+    
+    # Ressources et outils
+    st.markdown("---")
+    st.subheader("📚 Ressources & Outils Recommandés")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**📖 Livres adaptés par âge:**")
+        st.write("• **Uriel:** 'Père Riche, Père Pauvre pour Ados'")
+        st.write("• **Naelle:** 'Mon premier livre sur l'argent'")
+        st.write("• **Nell-Henri:** Livres imagés sur les échanges")
+        
+        st.markdown("**🎮 Jeux éducatifs:**")
+        st.write("• Jeu Cashflow de Kiyosaki (version famille)")
+        st.write("• Jeux de plateau sur l'argent")
+        st.write("• Applications éducatives financières")
+    
+    with col2:
+        st.markdown("**🛠️ Outils pratiques:**")
+        st.write("• Tirelires transparentes pour visualisation")
+        st.write("• Tableau de suivi des objectifs")
+        st.write("• Carnets de compte simplifiés")
+        
+        st.markdown("**🎯 Objectifs 2025:**")
+        if ages_actuels['Uriel'] >= 14:
+            st.write("• Uriel: Premier revenu business artistique")
+        st.write("• Naelle: Première épargne objectif (100k FCFA)")
+        st.write("• Nell-Henri: Compréhension pièces/billets")
 
-# ============================================================================
-# FONCTION PRINCIPALE AVEC NOUVELLE PAGE ADMIN
-# ============================================================================
+def show_vision_2030():
+    """Page vision long terme 2030"""
+    st.markdown('<div class="main-header"><h1>🔮 Vision Familiale 2030</h1></div>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div class="success-box">
+        <h3>🎯 Objectif Principal: Toute la famille en Suisse d'ici 2030</h3>
+        <p>Planification stratégique pour une migration familiale réussie avec indépendance financière.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Âges des enfants en 2030
+    ages_2030 = {"Uriel": 19, "Naelle": 12, "Nell-Henri": 10}
+    
+    st.subheader("👨‍👩‍👧‍👦 Situation Familiale en 2030")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown(f"""
+        <div class="metric-card">
+            <h4>🎓 Uriel (19 ans)</h4>
+            <p><strong>Situation:</strong> Université en Suisse</p>
+            <p><strong>Coût estimé:</strong> 25,000 CHF/an</p>
+            <p><strong>Statut:</strong> Étudiant indépendant</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f"""
+        <div class="metric-card">
+            <h4>🏫 Naelle (12 ans)</h4>
+            <p><strong>Situation:</strong> Collège Suisse</p>
+            <p><strong>Coût estimé:</strong> 15,000 CHF/an</p>
+            <p><strong>Statut:</strong> Adolescence</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown(f"""
+        <div class="metric-card">
+            <h4>🎒 Nell-Henri (10 ans)</h4>
+            <p><strong>Situation:</strong> École primaire Suisse</p>
+            <p><strong>Coût estimé:</strong> 12,000 CHF/an</p>
+            <p><strong>Statut:</strong> Enfance</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Calculs financiers 2030
+    st.markdown("---")
+    st.subheader("💰 Projection Financière 2030")
+    
+    # Coûts annuels en Suisse
+    cout_vie_suisse = {
+        'Logement famille': 180000,  # 18k CHF
+        'Université Uriel': 166700,   # 25k CHF  
+        'Scolarité Naelle': 100000,  # 15k CHF
+        'Scolarité Nell-Henri': 80000, # 12k CHF
+        'Vie courante famille': 200000, # 20k CHF
+        'Assurances & taxes': 66700,   # 10k CHF
+        'Transport': 33300,           # 5k CHF
+        'Loisirs & vacances': 50000,  # 7.5k CHF
+        'Divers & urgences': 33300    # 5k CHF
+    }
+    
+    total_cout_annuel_2030 = sum(cout_vie_suisse.values())  # ~910k CHF = ~606M FCFA
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**💸 Coûts Annuels 2030 (FCFA)**")
+        for categorie, montant in cout_vie_suisse.items():
+            montant_fcfa = montant * 667  # Taux approximatif CHF/FCFA
+            st.write(f"• **{categorie}:** {montant_fcfa:,.0f} FCFA ({montant:,.0f} CHF)")
+        
+        st.markdown(f"**🔴 TOTAL ANNUEL: {total_cout_annuel_2030 * 667:,.0f} FCFA ({total_cout_annuel_2030:,.0f} CHF)**")
+    
+    with col2:
+        # Objectifs de revenus passifs nécessaires
+        revenus_passifs_requis_mensuel = (total_cout_annuel_2030 * 667) / 12  # ~50M FCFA/mois
+        
+        st.markdown("**🎯 Objectifs Revenus Passifs 2030**")
+        st.write(f"• **Mensuel requis:** {revenus_passifs_requis_mensuel:,.0f} FCFA")
+        st.write(f"• **Annuel requis:** {total_cout_annuel_2030 * 667:,.0f} FCFA")
+        
+        # Revenus passifs actuels
+        kpis = calculer_kpis(st.session_state.projets, st.session_state.revenus)
+        revenus_passifs_actuels = kpis['revenus_passifs']
+        
+        st.write(f"• **Actuel (2025):** {revenus_passifs_actuels:,.0f} FCFA/mois")
+        
+        gap_mensuel = revenus_passifs_requis_mensuel - revenus_passifs_actuels
+        st.write(f"• **🚀 Gap à combler:** {gap_mensuel:,.0f} FCFA/mois")
+        
+        # Progression nécessaire
+        progression_annuelle = (gap_mensuel / revenus_passifs_actuels * 100) if revenus_passifs_actuels > 0 else 0
+        st.write(f"• **Croissance annuelle requise:** {progression_annuelle:.1f}%")
+    
+    # Roadmap stratégique
+    st.markdown("---")
+    st.subheader("🗺️ Roadmap Stratégique 2025-2030")
+    
+    roadmap_phases = [
+        {
+            "periode": "2025-2026",
+            "phase": "Consolidation",
+            "objectifs": [
+                "Finaliser projets immobiliers Cameroun",
+                "Développer IIBA vers 1M FCFA/mois",
+                "Créer fonds d'urgence 6 mois",
+                "Optimiser revenus William en Suisse"
+            ],
+            "target_revenus": "2M FCFA/mois passifs"
+        },
+        {
+            "periode": "2026-2027", 
+            "phase": "Accélération",
+            "objectifs": [
+                "Multiplier actifs locatifs",
+                "Lancer business secondaire William",
+                "Développer expertise Alix en investissement",
+                "Débuter préparation administrative Suisse"
+            ],
+            "target_revenus": "8M FCFA/mois passifs"
+        },
+        {
+            "periode": "2027-2028",
+            "phase": "Diversification", 
+            "objectifs": [
+                "Portfolio investissements internationaux",
+                "Business scalable famille",
+                "Préparation déménagement progressif",
+                "Formation spécialisée enfants"
+            ],
+            "target_revenus": "20M FCFA/mois passifs"
+        },
+        {
+            "periode": "2028-2030",
+            "phase": "Migration",
+            "objectifs": [
+                "Installation progressive famille Suisse",
+                "Maintien revenus passifs à distance", 
+                "Intégration système suisse",
+                "Indépendance financière totale"
+            ],
+            "target_revenus": "50M+ FCFA/mois passifs"
+        }
+    ]
+    
+    for phase in roadmap_phases:
+        couleur = "#28a745" if "2025" in phase["periode"] else "#ffc107" if "2026" in phase["periode"] else "#17a2b8" if "2027" in phase["periode"] else "#dc3545"
+        
+        with st.expander(f"{phase['periode']} - Phase {phase['phase']} | 🎯 {phase['target_revenus']}"):
+            st.markdown(f"""
+            <div style="border-left: 4px solid {couleur}; padding: 1rem; background: #f8f9fa;">
+                <h4 style="color: {couleur};">Objectifs {phase['phase']}</h4>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            for obj in phase["objectifs"]:
+                st.write(f"• {obj}")
+            
+            # Actions suggérées selon la phase
+            if "2025" in phase["periode"]:
+                st.markdown("**⚡ Actions immédiates:**")
+                st.write("• Finaliser titre foncier pour générer premiers loyers")
+                st.write("• Développer IIBA avec plan marketing structuré")
+                st.write("• Négocier augmentation ou promotion William")
+                
+            elif "2026" in phase["periode"]:
+                st.markdown("**🚀 Actions de croissance:**")
+                st.write("• Acquisition 2ème propriété locative")
+                st.write("• Formation Alix en investment immobilier avancé")
+                st.write("• Side-business William (consulting/freelance)")
+                
+            elif "2027" in phase["periode"]:
+                st.markdown("**🌍 Actions d'expansion:**")
+                st.write("• Diversification géographique des investissements")
+                st.write("• Business familial exportable en Suisse")
+                st.write("• Début procédures administratives migration")
+                
+            else:  # 2028-2030
+                st.markdown("**✈️ Actions de migration:**")
+                st.write("• Installation logistique progressive en Suisse")
+                st.write("• Maintien revenus passifs depuis Suisse")
+                st.write("• Intégration complète système suisse")
+    
+    # Projets suggérés activés/désactivés
+    st.markdown("---")
+    st.subheader("💡 Projets Suggérés pour Vision 2030")
+    
+    projets_suggests = [
+        {
+            "nom": "Acquisition immeuble locatif #2",
+            "budget": "15M FCFA",
+            "roi": "12%",
+            "priorite": "Haute",
+            "echeance": "2026",
+            "actif": True
+        },
+        {
+            "nom": "Formation expertise fiscale Suisse-Cameroun",
+            "budget": "500k FCFA", 
+            "roi": "25%",
+            "priorite": "Moyenne",
+            "echeance": "2025",
+            "actif": False
+        },
+        {
+            "nom": "Business e-commerce international",
+            "budget": "2M FCFA",
+            "roi": "30%",
+            "priorite": "Haute", 
+            "echeance": "2027",
+            "actif": True
+        },
+        {
+            "nom": "Portefeuille actions suisses",
+            "budget": "5M FCFA",
+            "roi": "8%",
+            "priorite": "Moyenne",
+            "echeance": "2026",
+            "actif": False
+        },
+        {
+            "nom": "Préparation administrative migration",
+            "budget": "1M FCFA",
+            "roi": "0%",
+            "priorite": "Critique",
+            "echeance": "2028",
+            "actif": True
+        }
+    ]
+    
+    for projet in projets_suggests:
+        statut_couleur = "#28a745" if projet["actif"] else "#6c757d"
+        statut_texte = "✅ Activé" if projet["actif"] else "⏸️ En attente"
+        
+        col1, col2, col3 = st.columns([3, 1, 1])
+        
+        with col1:
+            st.markdown(f"""
+            <div style="border-left: 4px solid {statut_couleur}; padding: 0.5rem; margin: 0.2rem 0;">
+                <strong>{projet['nom']}</strong> | {projet['budget']} | ROI: {projet['roi']} | {projet['echeance']}
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.write(f"**{statut_texte}**")
+        
+        with col3:
+            if st.button(f"{'Désactiver' if projet['actif'] else 'Activer'}", 
+                        key=f"toggle_{projet['nom'][:10]}"):
+                # Ici on pourrait toggle le statut
+                st.success(f"Statut modifié pour: {projet['nom']}")
+    
+    # Indicateurs de réussite
+    st.markdown("---")
+    st.subheader("📊 Indicateurs de Réussite Vision 2030")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**🎯 KPIs Financiers 2030:**")
+        st.write("• 50M+ FCFA revenus passifs/mois")
+        st.write("• 100% coûts Suisse couverts par passifs")
+        st.write("• 10+ actifs générateurs diversifiés")
+        st.write("• Fonds urgence = 12 mois coûts Suisse")
+        st.write("• 0% dépendance salaires")
+    
+    with col2:
+        st.markdown("**👨‍👩‍👧‍👦 KPIs Familiaux 2030:**")
+        st.write("• 3 enfants scolarisés système suisse")
+        st.write("• Uriel autonome financièrement")
+        st.write("• Intégration sociale et culturelle réussie")
+        st.write("• Maîtrise française/allemande/anglais")
+        st.write("• Réseau professionnel établi en Suisse")
+    
+    # Message de motivation
+    st.markdown("""
+    <div class="mindset-box">
+        <h3>🌟 Vision Familiale 2030 - "De Yaoundé à Zurich"</h3>
+        <p><strong>Alix & William :</strong> Vous avez 5 ans pour transformer votre rêve en réalité. 
+        Avec discipline, stratégie et les principes des grands mentors financiers, votre famille 
+        peut atteindre l'indépendance financière et s'installer durablement en Suisse.</p>
+        <p><em>"Le meilleur moment pour planter un arbre était il y a 20 ans. 
+        Le deuxième meilleur moment est maintenant." - Proverbe chinois</em></p>
+    </div>
+    """, unsafe_allow_html=True)
 
-def main():
-    # Chargement CSS
-    load_css()
-
-    # Initialisation session state
-    initialize_session_state()
-
-    # Sidebar navigation
-    selected_page = render_sidebar()
-
-    # Routing des pages
-    if selected_page == "📊 Dashboard Principal":
-        show_dashboard()
-    elif selected_page == "📋 Vue Kanban Projets":
-        show_kanban_view()
-    elif selected_page == "💼 Gestion Projets":
-        show_project_management()
-    elif selected_page == "💰 Revenus Variables":
-        show_revenue_management()
-    elif selected_page == "🎯 Conseils 3 Mentors":
-        show_mentor_advice()
-    elif selected_page == "📈 Analytics & KPIs":
-        show_analytics()
-    elif selected_page == "🚀 Progression Familiale":
-        show_progression()
-    elif selected_page == "👨‍👩‍👧‍👦 Éducation Enfants":
-        show_children_education()
-    elif selected_page == "🔮 Vision 2030":
-        show_vision_2030()
-    elif selected_page == "⚙️ Administration":
-        show_admin()
-
-if __name__ == "__main__":
-    main()
+def show_admin():
+    """Page administration complète"""
+    st.markdown('<div class="main-header"><h1>⚙️ Administration</h1></div>', unsafe_allow_html=True)
+    
+    # Onglets admin
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🎯 KPIs & Objectifs", "📋 Listes & Vocabulaire", 
+                                           "🧠 Conseils Mentors", "📊 Export/Import", "🗑️ Gestion Base"])
+    
+    with tab1:
+        st.subheader("🎯 Configuration des KPIs et Objectifs")
+        
+        with st.form("config_kpis"):
+            st.write("**Seuils et Objectifs Familiaux**")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                fonds_urgence_mois = st.number_input("Fonds d'urgence (mois de dépenses)", 
+                                                   min_value=1, max_value=12, 
+                                                   value=st.session_state.config_admin['seuils']['fonds_urgence_mois'])
+                
+                ratio_actifs_min = st.number_input("Ratio actifs minimum (%)", 
+                                                 min_value=0, max_value=100,
+                                                 value=st.session_state.config_admin['seuils']['ratio_actifs_min'])
+                
+                revenus_passifs_min = st.number_input("Objectif revenus passifs (%)", 
+                                                    min_value=0, max_value=100,
+                                                    value=st.session_state.config_admin
