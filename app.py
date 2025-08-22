@@ -498,11 +498,6 @@ def show_kanban_card(projet, couleur, categorie):
 
     # CSS class pour la catégorie
     with st.container():
-        # Style de la carte selon catégorie
-        st.markdown(f"""
-        <div class="kanban-card {categorie}">
-        """, unsafe_allow_html=True)
-
         # En-tête carte
         col1, col2 = st.columns([3, 1])
 
@@ -545,7 +540,6 @@ def show_kanban_card(projet, couleur, categorie):
             if st.button("📊 Détails", key=f"kanban_details_{projet['id']}"):
                 st.session_state.show_details_id = projet['id']
 
-        st.markdown("</div>", unsafe_allow_html=True)
         st.markdown("---")
 
         # Modal détails
@@ -1449,8 +1443,8 @@ def show_children_education():
             ],
             'activites': [
                 'Participation à la révision mensuelle des KPIs',
-                'Analyse d'un investissement familial',
-                'Création d'un mini-business plan'
+                'Analyse d un investissement familial',
+                'Création d un mini-business plan'
             ]
         },
         {
@@ -1477,7 +1471,7 @@ def show_children_education():
             'objectifs_mois': [
                 'Reconnaître les pièces et billets FCFA',
                 'Comprendre "garder sous" vs "dépenser sous"',
-                'Aider à compter l'argent des courses'
+                'Aider à compter l argent des courses'
             ],
             'activites': [
                 'Jeu "Marchande" avec vraie monnaie',
@@ -1517,7 +1511,7 @@ def show_children_education():
 
     planning_mensuel = {
         1: "Nouvelle année financière - Objectifs famille",
-        2: "Mois de l'épargne - Challenge tirelires",
+        2: "Mois de l épargne - Challenge tirelires",
         3: "Trimestre bilan - Réunion famille",
         4: "Mois des projets - Planification ensemble",
         5: "Préparation été - Budget vacances",
@@ -1623,7 +1617,7 @@ def show_vision_2030():
             "✅ Finaliser titre foncier Mejeuh",
             "📈 Développer IIBA pour 500k FCFA/mois",
             "💰 Atteindre cash flow mensuel positif",
-            "🏦 Constituer fonds d'urgence 6 mois"
+            "🏦 Constituer fonds d urgence 6 mois"
         ]
     elif st.session_state.filter_year == 2026:
         actions = [
