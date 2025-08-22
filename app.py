@@ -310,8 +310,7 @@ def main():
         <h3>💡 Changement Mindset</h3>
         <p><strong>William:</strong><br>
         ❌ "Je dois travailler plus pour financer"<br>
-        ✅ "Comment développer des revenus qui travaillent sans moi?" 
-        
+        ✅ "Comment développer des revenus qui travaillent sans moi?"         
         <br><br><strong>Alix:</strong><br>
         ❌ "Comment gérer tous ces projets dans le budget?"<br>
         ✅ "Quels actifs vais-je acquérir ce trimestre?"</p>
