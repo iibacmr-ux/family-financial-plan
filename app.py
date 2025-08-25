@@ -1138,7 +1138,10 @@ def show_add_project_form():
                     st.session_state.admin_config['listes_config']['types_projet'],
                     help="Actif = génère revenus, Passif = coûte de l'argent, Formation = capital humain"
                 )
-                montant_total = st.number_input("Budget total nécessaire (FCFA)*", min_value=0, step=10000)
+                montant_total = st.number_input("Budget total nécessaire (FCFA)*",
+                    min_value=0,
+                    value=int(projet.get("montant_total", 0) or 0),
+                    step=10000)
                 roi_attendu = st.number_input("ROI attendu (%)", min_value=0.0, max_value=100.0, step=0.1)
                 priorite = st.selectbox("Priorité", st.session_state.admin_config['listes_config']['priorites'])
                 responsable = st.selectbox("Responsable*", st.session_state.admin_config['listes_config']['responsables'])
@@ -1149,10 +1152,14 @@ def show_add_project_form():
                     st.session_state.admin_config['listes_config']['statuts_projet']
                 )
                 echeance = st.date_input("Échéance prévue", min_value=date.today())
-                budget_mensuel = st.number_input("Budget alloué/mois (FCFA)", min_value=0, step=10000)
+                budget_mensuel = st.number_input("Budget alloué/mois (FCFA)",
+                    min_value=0,
+                    value=int(projet.get("budget_alloue_mensuel", 0) or 0),
+                    step=10000)
                 cash_flow_mensuel = st.number_input(
                     "Cash flow mensuel estimé (FCFA)", 
                     help="Positif pour revenus, négatif pour dépenses",
+                    value=int(projet.get("cash_flow_mensuel", 0) or 0),
                     step=10000
                 )
                 source_financement = st.selectbox(
@@ -1226,7 +1233,7 @@ def show_edit_project_form():
                     index=st.session_state.admin_config['listes_config']['types_projet'].index(projet['type'])
                 )
                 montant_total = st.number_input("Budget total nécessaire (FCFA)*", value=projet['montant_total'], step=10000)
-                roi_attendu = st.number_input("ROI attendu (%)", min_value=0.0, max_value=100.0, value=float(projet.get("roi_attendu", 0.0)), step=0.1, format="%.1f")
+                roi_attendu = st.number_input("ROI attendu (%)", value=float(safe_get(projet, 'roi_attendu', 0.0)), format="%.1f", step=0.1)
                 priorite = st.selectbox(
                     "Priorité", 
                     st.session_state.admin_config['listes_config']['priorites'],
@@ -1245,8 +1252,8 @@ def show_edit_project_form():
                     index=st.session_state.admin_config['listes_config']['statuts_projet'].index(projet['statut'])
                 )
                 echeance = st.date_input("Échéance prévue", value=projet['echeance'])
-                budget_mensuel = st.number_input("Budget alloué/mois (FCFA)", min_value=0, value=int(projet.get("budget_alloue_mensuel", 0) or 0), step=10000)
-                cash_flow_mensuel = st.number_input("Cash flow mensuel estimé (FCFA)", min_value=0, value=int(projet.get("cash_flow_mensuel", 0) or 0), step=10000)
+                budget_mensuel = st.number_input("Budget alloué/mois (FCFA)", value=projet['budget_alloue_mensuel'], step=10000)
+                cash_flow_mensuel = st.number_input("Cash flow mensuel estimé (FCFA)", value=projet['cash_flow_mensuel'], step=10000)
 
                 sources_list = get_sources_financement()
                 current_source = safe_get(projet, 'source_financement', sources_list[0])
@@ -1286,6 +1293,11 @@ def show_edit_project_form():
                     st.session_state.edit_project_id = None
                     st.success("Projet modifié!")
                     st.rerun()
+                
+                _ = st.form_submit_button(
+                    "✅ Valider (secours)",
+                    help="Bouton de secours pour garantir l'envoi du formulaire"
+                )
 
             with col2:
                 if st.form_submit_button("❌ Annuler"):
