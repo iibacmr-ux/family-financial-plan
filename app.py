@@ -1226,7 +1226,7 @@ def show_edit_project_form():
                     index=st.session_state.admin_config['listes_config']['types_projet'].index(projet['type'])
                 )
                 montant_total = st.number_input("Budget total nécessaire (FCFA)*", value=projet['montant_total'], step=10000)
-                roi_attendu = st.number_input("ROI attendu (%)", value=projet['roi_attendu'], step=0.1)
+                roi_attendu = st.number_input("ROI attendu (%)", min_value=0.0, max_value=100.0, value=float(projet.get("roi_attendu", 0.0)), step=0.1, format="%.1f")
                 priorite = st.selectbox(
                     "Priorité", 
                     st.session_state.admin_config['listes_config']['priorites'],
@@ -1245,8 +1245,8 @@ def show_edit_project_form():
                     index=st.session_state.admin_config['listes_config']['statuts_projet'].index(projet['statut'])
                 )
                 echeance = st.date_input("Échéance prévue", value=projet['echeance'])
-                budget_mensuel = st.number_input("Budget alloué/mois (FCFA)", value=projet['budget_alloue_mensuel'], step=10000)
-                cash_flow_mensuel = st.number_input("Cash flow mensuel estimé (FCFA)", value=projet['cash_flow_mensuel'], step=10000)
+                budget_mensuel = st.number_input("Budget alloué/mois (FCFA)", min_value=0, value=int(projet.get("budget_alloue_mensuel", 0) or 0), step=10000)
+                cash_flow_mensuel = st.number_input("Cash flow mensuel estimé (FCFA)", min_value=0, value=int(projet.get("cash_flow_mensuel", 0) or 0), step=10000)
 
                 sources_list = get_sources_financement()
                 current_source = safe_get(projet, 'source_financement', sources_list[0])
