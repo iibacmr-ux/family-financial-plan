@@ -1127,6 +1127,8 @@ def show_project_advice(projet):
 
 def show_add_project_form():
     """Formulaire d'ajout de projet avec dates et responsable"""
+def show_add_project_form():
+    """Formulaire d'ajout de projet avec dates et responsable"""
     with st.expander("➕ Nouveau Projet", expanded=True):
         with st.form("add_project_form"):
             col1, col2 = st.columns(2)
@@ -1138,30 +1140,27 @@ def show_add_project_form():
                     st.session_state.admin_config['listes_config']['types_projet'],
                     help="Actif = génère revenus, Passif = coûte de l'argent, Formation = capital humain"
                 )
-                montant_total = st.number_input("Budget total nécessaire (FCFA)*",
-                    min_value=0,
-                    value=int(projet.get("montant_total", 0) or 0),
-                    step=10000)
+
+                # ✅ CORRECTION: Suppression des références à 'projet' inexistant
+                montant_total = st.number_input("Budget total nécessaire (FCFA)*", min_value=0, step=10000)
                 roi_attendu = st.number_input("ROI attendu (%)", min_value=0.0, max_value=100.0, step=0.1)
                 priorite = st.selectbox("Priorité", st.session_state.admin_config['listes_config']['priorites'])
                 responsable = st.selectbox("Responsable*", st.session_state.admin_config['listes_config']['responsables'])
 
             with col2:
                 statut = st.selectbox(
-                    "Statut", 
+                    "Statut",
                     st.session_state.admin_config['listes_config']['statuts_projet']
                 )
+
                 echeance = st.date_input("Échéance prévue", min_value=date.today())
-                budget_mensuel = st.number_input("Budget alloué/mois (FCFA)",
-                    min_value=0,
-                    value=int(projet.get("budget_alloue_mensuel", 0) or 0),
-                    step=10000)
+                budget_mensuel = st.number_input("Budget alloué/mois (FCFA)", min_value=0, step=10000)
                 cash_flow_mensuel = st.number_input(
-                    "Cash flow mensuel estimé (FCFA)", 
+                    "Cash flow mensuel estimé (FCFA)",
                     help="Positif pour revenus, négatif pour dépenses",
-                    value=int(projet.get("cash_flow_mensuel", 0) or 0),
                     step=10000
                 )
+
                 source_financement = st.selectbox(
                     "Source de financement",
                     get_sources_financement()
@@ -1169,21 +1168,18 @@ def show_add_project_form():
 
             description = st.text_area("Description détaillée", height=100)
 
+            # ✅ CORRECTION: Boutons submit dans le formulaire
             col1, col2 = st.columns(2)
-
             with col1:
                 submitted = st.form_submit_button("✅ Créer Projet", type="primary")
-
             with col2:
-                if st.form_submit_button("❌ Annuler"):
-                    st.session_state.show_add_form = False
-                    st.rerun()
+                cancelled = st.form_submit_button("❌ Annuler")
 
+            # ✅ CORRECTION: Traitement après soumission
             if submitted:
                 if nom and type_projet and montant_total > 0 and responsable:
                     # Créer nouveau projet
                     new_id = max([p['id'] for p in st.session_state.projets]) + 1 if st.session_state.projets else 1
-
                     nouveau_projet = {
                         'id': new_id,
                         'nom': nom,
@@ -1210,107 +1206,109 @@ def show_add_project_form():
                     st.rerun()
                 else:
                     st.error("⚠️ Veuillez remplir tous les champs obligatoires.")
+                    
+            elif cancelled:
+                st.session_state.show_add_form = False
+                st.rerun()
 
-def show_edit_project_form(projet: dict):
+
+def show_edit_project_form():
     """Formulaire de modification de projet avec dates"""
-    import datetime as _dt
-    import streamlit as st
+    project_id = st.session_state.edit_project_id
+    projet = next((p for p in st.session_state.projets if p['id'] == project_id), None)
 
     if not projet:
-        st.warning("Projet introuvable.")
+        st.error("Projet introuvable")
+        st.session_state.edit_project_id = None
         return
 
-    # Helpers sûrs pour extraire des valeurs typées
-    def _as_int(x, default=0):
-        try:
-            return int(x if x is not None else default)
-        except Exception:
-            return int(default)
+    with st.expander(f"✏️ Modifier: {projet['nom']}", expanded=True):
+        with st.form("edit_project_form"):
+            col1, col2 = st.columns(2)
 
-    def _as_float(x, default=0.0):
-        try:
-            return float(x if x is not None else default)
-        except Exception:
-            return float(default)
+            with col1:
+                nom = st.text_input("Nom du projet*", value=projet['nom'])
+                type_projet = st.selectbox(
+                    "Type selon Kiyosaki*",
+                    st.session_state.admin_config['listes_config']['types_projet'],
+                    index=st.session_state.admin_config['listes_config']['types_projet'].index(projet['type'])
+                )
 
-    def _as_date(x, default=None):
-        try:
-            if isinstance(x, _dt.date):
-                return x
-            if isinstance(x, str) and x:
-                return _dt.date.fromisoformat(x[:10])
-        except Exception:
-            pass
-        return default or _dt.date.today()
+                montant_total = st.number_input("Budget total nécessaire (FCFA)*", value=int(projet['montant_total']), step=10000)
+                
+                # ✅ CORRECTION: Sécurisation des types numériques
+                roi_value = safe_get(projet, 'roi_attendu', 0.0)
+                if roi_value is None or roi_value == 'N/A':
+                    roi_value = 0.0
+                roi_attendu = st.number_input("ROI attendu (%)", value=float(roi_value), min_value=0.0, max_value=100.0, step=0.1)
 
-    with st.form("edit_project_form", clear_on_submit=False):
-        st.subheader("✏️ Modifier un projet")
+                priorite = st.selectbox(
+                    "Priorité",
+                    st.session_state.admin_config['listes_config']['priorites'],
+                    index=st.session_state.admin_config['listes_config']['priorites'].index(safe_get(projet, 'priorite', 'Moyenne'))
+                )
 
-        col1, col2 = st.columns(2)
+                responsable = st.selectbox(
+                    "Responsable*",
+                    st.session_state.admin_config['listes_config']['responsables'],
+                    index=st.session_state.admin_config['listes_config']['responsables'].index(safe_get(projet, 'responsable', 'Alix'))
+                )
 
-        with col1:
-            titre = st.text_input("Titre*", value=str(projet.get("titre") or projet.get("Projet") or ""))
-            categorie = st.text_input("Catégorie", value=str(projet.get("categorie") or projet.get("Categorie") or ""))
-            type_projet = st.selectbox("Type", options=["Actif", "Passif"],
-                                       index=0 if str(projet.get("type") or projet.get("Type") or "").lower().startswith("actif") else 1)
-            priorite = st.selectbox("Priorité", options=["Vitale", "Importante", "Stratégique", "Reportable"],
-                                    index=0 if str(projet.get("Priorite") or projet.get("priorite") or "").lower().startswith("vitale") else 1)
-            date_ech = st.date_input("Échéance",
-                                     value=_as_date(projet.get("Date_echeance") or projet.get("date_echeance")))
+            with col2:
+                statut = st.selectbox(
+                    "Statut",
+                    st.session_state.admin_config['listes_config']['statuts_projet'],
+                    index=st.session_state.admin_config['listes_config']['statuts_projet'].index(projet['statut'])
+                )
 
-        with col2:
-            montant_total = st.number_input(
-                "Budget total nécessaire (FCFA)*",
-                min_value=0,
-                value=_as_int(projet.get("montant_total") or projet.get("Budget_prevu")),
-                step=10_000,
-            )
-            budget_mensuel = st.number_input(
-                "Budget alloué/mois (FCFA)",
-                min_value=0,
-                value=_as_int(projet.get("budget_alloue_mensuel") or projet.get("Budget_cotise") or 0),
-                step=10_000,
-            )
-            cashflow = st.number_input(
-                "Cash flow mensuel estimé (FCFA)",
-                min_value=0,
-                value=_as_int(projet.get("cash_flow_mensuel") or 0),
-                step=10_000,
-            )
-            roi_attendu = st.number_input(
-                "ROI attendu (%)",
-                min_value=0.0,
-                max_value=100.0,
-                value=_as_float(projet.get("roi_attendu") or projet.get("ROI_estime_pct") or 0.0),
-                step=0.1,
-                format="%.1f",
-            )
+                echeance = st.date_input("Échéance prévue", value=projet['echeance'])
+                budget_mensuel = st.number_input("Budget alloué/mois (FCFA)", value=int(projet['budget_alloue_mensuel']), step=10000)
+                cash_flow_mensuel = st.number_input("Cash flow mensuel estimé (FCFA)", value=int(projet['cash_flow_mensuel']), step=10000)
 
-        commentaire = st.text_area("Commentaire / Notes", value=str(projet.get("commentaire") or ""))
+                sources_list = get_sources_financement()
+                current_source = safe_get(projet, 'source_financement', sources_list)
+                source_index = sources_list.index(current_source) if current_source in sources_list else 0
+                source_financement = st.selectbox(
+                    "Source de financement",
+                    sources_list,
+                    index=source_index
+                )
 
-        # ⬇️ BOUTON DE SOUMISSION OBLIGATOIRE DANS LE FORM
-        submitted = st.form_submit_button("💾 Sauvegarder")
-        # (Bouton de secours parano pour Streamlit Cloud : redondant mais inoffensif)
-        _ = st.form_submit_button("✅ Valider (secours)")
+            description = st.text_area("Description détaillée", value=projet['description'])
 
-    # Traiter la soumission ENSUITE (hors du bloc 'with st.form')
-    if submitted:
-        # Ici, mettez à jour votre structure/DF/bdd
-        # Exemple générique :
-        projet["titre"] = titre
-        projet["Projet"] = titre
-        projet["Categorie"] = categorie
-        projet["Type"] = type_projet
-        projet["Priorite"] = priorite
-        projet["Date_echeance"] = date_ech.isoformat()
-        projet["Budget_prevu"] = montant_total
-        projet["Budget_cotise"] = budget_mensuel
-        projet["cash_flow_mensuel"] = cashflow
-        projet["roi_attendu"] = roi_attendu
-        projet["ROI_estime_pct"] = roi_attendu
-        projet["commentaire"] = commentaire
+            # ✅ CORRECTION: Boutons submit dans le formulaire
+            col1, col2 = st.columns(2)
+            with col1:
+                submitted = st.form_submit_button("💾 Sauvegarder", type="primary")
+            with col2:
+                cancelled = st.form_submit_button("❌ Annuler")
 
-        st.success("Projet modifié avec succès.")
+            # ✅ CORRECTION: Traitement des actions après soumission
+            if submitted:
+                # Mettre à jour le projet
+                index = next(i for i, p in enumerate(st.session_state.projets) if p['id'] == project_id)
+                st.session_state.projets[index].update({
+                    'nom': nom,
+                    'type': type_projet,
+                    'montant_total': montant_total,
+                    'budget_alloue_mensuel': budget_mensuel,
+                    'cash_flow_mensuel': cash_flow_mensuel,
+                    'statut': statut,
+                    'echeance': echeance,
+                    'roi_attendu': roi_attendu,
+                    'priorite': priorite,
+                    'description': description,
+                    'source_financement': source_financement,
+                    'responsable': responsable,
+                    'date_modification': datetime.now()
+                })
+                st.session_state.edit_project_id = None
+                st.success("Projet modifié!")
+                st.rerun()
+                
+            elif cancelled:
+                st.session_state.edit_project_id = None
+                st.rerun()
 
 
 def filter_projects(projets, filter_type, filter_status, filter_priority, sort_by):
