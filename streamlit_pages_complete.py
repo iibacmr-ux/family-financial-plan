@@ -615,7 +615,7 @@ def main():
     # Routing des pages
     if selected_page == "📊 Dashboard Principal":
         show_dashboard()
-    elif selected_page == "💼 Gestion Projets":
+    elif selected_page == "💼 Gestion Projets X":
         show_project_management()
     elif selected_page == "🎯 Conseils 3 Mentors":
         show_mentor_advice()
